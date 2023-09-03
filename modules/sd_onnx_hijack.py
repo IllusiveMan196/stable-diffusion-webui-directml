@@ -243,7 +243,6 @@ def OnnxStableDiffusionImg2ImgPipeline__call__(
     offset = self.scheduler.config.get("steps_offset", 0)
     init_timestep = int(num_inference_steps * strength) + offset
     init_timestep = min(init_timestep, num_inference_steps)
-    init_timestep = num_inference_steps
 
     timesteps = self.scheduler.timesteps.numpy()[-init_timestep]
     timesteps = np.array([timesteps] * batch_size * num_images_per_prompt)

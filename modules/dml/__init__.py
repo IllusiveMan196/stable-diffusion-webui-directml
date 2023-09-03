@@ -11,7 +11,8 @@ if system() == "Windows":
 do_nothing = lambda: None
 
 def _set_memory_provider():
-    from modules.shared import opts, cmd_opts, log
+    from modules.shared import opts, cmd_opts
+    from modules.shared_state import log
 
     if opts.directml_memory_provider == "Performance Counter":
         from .backend import pdh_mem_get_info
@@ -34,7 +35,7 @@ def _set_memory_provider():
         torch.dml.mem_get_info = mem_get_info
     torch.cuda.mem_get_info = torch.dml.mem_get_info
 
-def directml_init():
+def initialize():
     from modules.dml.backend import DirectML # pylint: disable=ungrouped-imports
     # Alternative of torch.cuda for DirectML.
     torch.dml = DirectML
@@ -57,9 +58,13 @@ def directml_init():
 
     torch.Tensor.directml = lambda self: self.to(torch.dml.current_device())
 
-def directml_do_hijack():
+def do_hijack():
     import modules.dml.hijack
     from modules.devices import device
+
+    CondFunc('torch.Generator',
+        lambda orig_func, device: orig_func("cpu"),
+        lambda orig_func, device: True)
 
     if not torch.dml.has_float64_support(device):
         CondFunc('torch.from_numpy',
@@ -68,5 +73,5 @@ def directml_do_hijack():
 
     _set_memory_provider()
 
-def directml_override_opts():
+def override_opts():
     _set_memory_provider()
