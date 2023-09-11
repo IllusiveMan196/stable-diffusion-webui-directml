@@ -9,6 +9,7 @@ if system() == "Windows":
     memory_providers.append("Performance Counter")
     default_memory_provider = "Performance Counter"
 do_nothing = lambda: None
+do_nothing_with_self = lambda self: None
 
 def _set_memory_provider():
     from modules.shared import opts, cmd_opts
@@ -67,6 +68,7 @@ def do_hijack():
         lambda orig_func, device: True)
 
     if not torch.dml.has_float64_support(device):
+        torch.Tensor.__str__ = do_nothing_with_self
         CondFunc('torch.from_numpy',
             lambda orig_func, *args, **kwargs: orig_func(args[0].astype('float32')),
             lambda *args, **kwargs: args[1].dtype == float)

@@ -99,6 +99,7 @@ class KDiffusionSampler(sd_samplers_common.Sampler):
         if p.sampler_noise_scheduler_override:
             sigmas = p.sampler_noise_scheduler_override(steps)
         elif opts.k_sched_type != "Automatic":
+            self.model_wrap.sigmas.__str__() # DML stringify
             m_sigma_min, m_sigma_max = (self.model_wrap.sigmas[0].item(), self.model_wrap.sigmas[-1].item())
             sigma_min, sigma_max = (0.1, 10) if opts.use_old_karras_scheduler_sigmas else (m_sigma_min, m_sigma_max)
             sigmas_kwargs = {
@@ -124,10 +125,12 @@ class KDiffusionSampler(sd_samplers_common.Sampler):
 
             sigmas = sigmas_func(n=steps, **sigmas_kwargs, device=shared.device)
         elif self.config is not None and self.config.options.get('scheduler', None) == 'karras':
+            self.model_wrap.sigmas.__str__() # DML stringify
             sigma_min, sigma_max = (0.1, 10) if opts.use_old_karras_scheduler_sigmas else (self.model_wrap.sigmas[0].item(), self.model_wrap.sigmas[-1].item())
 
             sigmas = k_diffusion.sampling.get_sigmas_karras(n=steps, sigma_min=sigma_min, sigma_max=sigma_max, device=shared.device)
         elif self.config is not None and self.config.options.get('scheduler', None) == 'exponential':
+            self.model_wrap.sigmas.__str__() # DML stringify
             m_sigma_min, m_sigma_max = (self.model_wrap.sigmas[0].item(), self.model_wrap.sigmas[-1].item())
             sigmas = k_diffusion.sampling.get_sigmas_exponential(n=steps, sigma_min=m_sigma_min, sigma_max=m_sigma_max, device=shared.device)
         else:
