@@ -1673,9 +1673,8 @@ def create_ui():
                             )
                             onnx_dest = gr.Textbox(
                                 label="Model destination (folder name)",
-                                value="ONNX",
+                                value="ONNX-Olive",
                                 elem_id="onnx_dest",
-                                info="Change to 'ONNX-Olive' if this model is optimized.",
                             )
                             button_onnx_download = gr.Button(
                                 value="Download",

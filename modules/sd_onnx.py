@@ -9,6 +9,7 @@ import diffusers
 from transformers import CLIPTokenizer, CLIPImageProcessor
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass, field
+from collections import defaultdict
 from typing import TypeVar, Generic, Union, Any
 from pathlib import Path
 from PIL import Image, ImageOps
@@ -23,7 +24,9 @@ from modules.sd_samplers_common import SamplerData
 
 do_hijack()
 
-device_map = dict()
+device_map = defaultdict(lambda: ("DmlExecutionProvider", {
+    "device_id": int(shared.cmd_opts.device_id or 0)
+}))
 
 T2I = TypeVar("T2I")
 I2I = TypeVar("I2I")
@@ -54,7 +57,7 @@ class BaseONNXModel(Generic[T2I, I2I, INP], WebuiSdModel, metaclass=ABCMeta):
         self.sd_checkpoint_info = ckpt_info
         self.filename = ckpt_info.filename
         self.path = Path(ckpt_info.filename)
-        self.is_optimized = "[Optimized]" in ckpt_info.title
+        self.is_optimized = ckpt_info.is_optimized
         self._sess_options = ort.SessionOptions()
 
     def to(self, *args, **kwargs):
@@ -89,12 +92,11 @@ class BaseONNXModel(Generic[T2I, I2I, INP], WebuiSdModel, metaclass=ABCMeta):
         }
 
     def load_orm(self, submodel: str) -> Union[diffusers.OnnxRuntimeModel, None]:
-        return (
-            diffusers.OnnxRuntimeModel.from_pretrained(
-                self.path / submodel, provider=device_map[submodel]
-            )
-            if os.path.isdir(self.path / submodel)
-            else None
+        path = self.path / submodel
+        if not self.sd_checkpoint_info.is_optimized and self.sd_checkpoint_info.optimized_model_info is not None:
+            path = self.sd_checkpoint_info.optimized_model_info[submodel]["optimized"]["path"].parent
+        return diffusers.OnnxRuntimeModel.from_pretrained(
+            path, provider=device_map[submodel]
         )
 
     def load_tokenizer(self, name: str) -> Union[CLIPTokenizer, None]:
@@ -266,6 +268,28 @@ class ONNXStableDiffusionProcessing(metaclass=ABCMeta):
         self.sampler = find_sampler_config(self.sampler_name)
         if self.sampler is None:
             raise Exception("Unknown sampler.")
+
+        if not self.sd_model.is_optimized and self.sd_model.sd_checkpoint_info.optimized_model_info is None:
+            from modules.sd_olive_ui import optimize
+            self.sd_model.sd_checkpoint_info.optimized_model_info = optimize(
+                unoptimized_dir=self.sd_model.path,
+                optimized_dir=None,
+                save_optimized=False,
+                vae_id=None,
+                vae_subfolder="vae",
+                use_fp16=True,
+                sample_height=self.height,
+                sample_width=self.width,
+                submodels=[
+                    "text_encoder",
+                    "unet",
+                    "vae_decoder",
+                    "vae_encoder",
+                ] + (
+                    ["text_encoder_2"] if self.sd_model.is_sdxl else []
+                ),
+                olive_merge_lora=False,
+            )
 
         self.sd_model.set_mem_pattern(shared.opts.enable_mem_pattern)
         self.sd_model.set_mem_reuse(shared.opts.enable_mem_reuse)

@@ -3,9 +3,8 @@ from optimum.onnxruntime import (
     ORTStableDiffusionXLImg2ImgPipeline,
 )
 
-from modules import shared
 from modules.sd_samplers_common import SamplerData
-from modules.sd_onnx import BaseONNXModel, device_map
+from modules.sd_onnx import BaseONNXModel
 
 
 class ONNXStableDiffusionXLModel(
@@ -17,8 +16,8 @@ class ONNXStableDiffusionXLModel(
 ):
     is_sdxl = True
 
-    def __init__(self, dirname: str):
-        super().__init__(dirname)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self._sess_options.add_free_dimension_override_by_name(
             "unet_sample_channels", 4
         )
@@ -31,18 +30,6 @@ class ONNXStableDiffusionXLModel(
     def create_txt2img_pipeline(
         self, sampler: SamplerData
     ) -> ORTStableDiffusionXLPipeline:
-        if "text_encoder" not in device_map:
-            return ORTStableDiffusionXLPipeline.from_pretrained(
-                self.path,
-                provider="DmlExecutionProvider"
-                if shared.cmd_opts.backend == "directml"
-                else "CUDAExecutionProvider",
-                scheduler=sampler.constructor.from_pretrained(
-                    self.path, subfolder="scheduler"
-                ),
-                sess_options=self._sess_options,
-                **self.get_pipeline_config(),
-            )
         return ORTStableDiffusionXLPipeline(
             text_encoder_session=self.load_orm("text_encoder"),
             text_encoder_2_session=self.load_orm("text_encoder_2"),
@@ -61,18 +48,6 @@ class ONNXStableDiffusionXLModel(
     def create_img2img_pipeline(
         self, sampler: SamplerData
     ) -> ORTStableDiffusionXLImg2ImgPipeline:
-        if "text_encoder" not in device_map:
-            return ORTStableDiffusionXLImg2ImgPipeline.from_pretrained(
-                self.path,
-                provider="DmlExecutionProvider"
-                if shared.cmd_opts.backend == "directml"
-                else "CUDAExecutionProvider",
-                scheduler=sampler.constructor.from_pretrained(
-                    self.path, subfolder="scheduler"
-                ),
-                sess_options=self._sess_options,
-                **self.get_pipeline_config(),
-            )
         return ORTStableDiffusionXLImg2ImgPipeline(
             text_encoder_session=self.load_orm("text_encoder"),
             text_encoder_2_session=self.load_orm("text_encoder_2"),

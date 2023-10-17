@@ -2,14 +2,14 @@ import os
 import json
 import torch
 import shutil
-from typing import Union, Tuple, List
+from typing import Union, Optional, Tuple, List
 from pathlib import Path
 from diffusers import (
     DiffusionPipeline,
-    OnnxRuntimeModel,
-    OnnxStableDiffusionPipeline,
     StableDiffusionPipeline,
     StableDiffusionXLPipeline,
+    OnnxRuntimeModel,
+    OnnxStableDiffusionPipeline,
 )
 from optimum.onnxruntime import ORTStableDiffusionXLPipeline
 from olive.model import ONNXModel
@@ -34,13 +34,17 @@ available_sampling_methods = [
 def ready(unoptimized_dir: str, optimized_dir: str):
     unload_model_weights()
 
-    unoptimized_dir = Path(models_path) / "ONNX" / unoptimized_dir
+    unoptimized_dir = Path(models_path) / "OliveCache" / unoptimized_dir
     optimized_dir = Path(models_path) / "ONNX-Olive" / optimized_dir
 
+    return unoptimized_dir, optimized_dir
+
+
+def cleanup(optimized_dir: str):
+    if not shared.opts.cache_optimized_model:
+        shutil.rmtree("cache", ignore_errors=True)
     shutil.rmtree("footprints", ignore_errors=True)
     shutil.rmtree(optimized_dir, ignore_errors=True)
-
-    return unoptimized_dir, optimized_dir
 
 
 def optimize_sd_from_ckpt(
@@ -70,6 +74,7 @@ def optimize_sd_from_ckpt(
         scheduler_type=scheduler_type,
     )
     pipeline.save_pretrained(unoptimized_dir)
+    del pipeline
 
     hw_synced = isinstance(sample_size, int)
 
@@ -89,7 +94,7 @@ def optimize_sd_from_ckpt(
     optimize(
         unoptimized_dir,
         optimized_dir,
-        pipeline,
+        True,
         vae_id,
         vae_subfolder,
         use_fp16,
@@ -130,6 +135,7 @@ def optimize_sdxl_from_ckpt(
         scheduler_type=scheduler_type,
     )
     pipeline.save_pretrained(unoptimized_dir)
+    del pipeline
 
     hw_synced = isinstance(sample_size, int)
 
@@ -149,7 +155,7 @@ def optimize_sdxl_from_ckpt(
     optimize(
         unoptimized_dir,
         optimized_dir,
-        pipeline,
+        True,
         vae_id,
         vae_subfolder,
         use_fp16,
@@ -194,6 +200,7 @@ def optimize_sd_from_onnx(
             model_id, torch_dtype=torch.float32, requires_safety_checker=False
         )
         pipeline.save_pretrained(unoptimized_dir)
+    del pipeline
 
     hw_synced = isinstance(sample_size, int)
 
@@ -213,7 +220,7 @@ def optimize_sd_from_onnx(
     optimize(
         unoptimized_dir,
         optimized_dir,
-        pipeline,
+        True,
         vae_id,
         vae_subfolder,
         use_fp16,
@@ -258,6 +265,7 @@ def optimize_sdxl_from_onnx(
             model_id, torch_dtype=torch.float32, requires_safety_checker=False
         )
         pipeline.save_pretrained(unoptimized_dir)
+    del pipeline
 
     hw_synced = isinstance(sample_size, int)
 
@@ -277,7 +285,7 @@ def optimize_sdxl_from_onnx(
     optimize(
         unoptimized_dir,
         optimized_dir,
-        pipeline,
+        True,
         vae_id,
         vae_subfolder,
         use_fp16,
@@ -293,9 +301,9 @@ def optimize_sdxl_from_onnx(
 
 def optimize(
     unoptimized_dir: Path,
-    optimized_dir: Path,
-    pipeline: DiffusionPipeline,
-    vae_id: str,
+    optimized_dir: Optional[Path],
+    save_optimized: bool,
+    vae_id: Optional[str],
     vae_subfolder: str,
     use_fp16: bool,
     sample_height: int,
@@ -304,6 +312,9 @@ def optimize(
     olive_merge_lora: bool,
     *olive_merge_lora_inputs,
 ):
+    if optimized_dir is not None:
+        cleanup(optimized_dir)
+
     is_sdxl = "text_encoder_2" in submodels
     model_info = {}
 
@@ -369,76 +380,82 @@ def optimize(
 
             print(f"Optimized {submodel_name}")
 
-    print("\nCreating ONNX pipeline...")
-    kwargs = dict()
-    if is_sdxl:
-        kwargs["text_encoder_2"] = pipeline.text_encoder_2
-    else:
-        kwargs["safety_checker"] = pipeline.safety_checker
-    kwargs["text_encoder"] = pipeline.text_encoder
-    kwargs["unet"] = pipeline.unet
-    kwargs["vae_decoder"] = pipeline.vae_decoder
-    kwargs["vae_encoder"] = pipeline.vae_encoder
-    for submodel in submodels:
-        kwargs[submodel] = OnnxRuntimeModel.from_pretrained(
-            model_info[submodel]["unoptimized"]["path"].parent
+    if save_optimized:
+        print("Copying optimized models...")
+        shutil.copytree(
+            unoptimized_dir, optimized_dir, ignore=shutil.ignore_patterns("weights.pb", "*.safetensors", "*.ckpt")
         )
 
-    onnx_pipeline = (
-        ORTStableDiffusionXLPipeline(
-            text_encoder_session=kwargs["text_encoder"],
-            text_encoder_2_session=kwargs["text_encoder_2"],
-            unet_session=kwargs["unet"],
-            vae_decoder_session=kwargs["vae_decoder"],
-            vae_encoder_session=kwargs["vae_encoder"],
-            tokenizer=pipeline.tokenizer,
-            tokenizer_2=pipeline.tokenizer_2,
-            scheduler=pipeline.scheduler,
-            feature_extractor=pipeline.feature_extractor
-            if hasattr(pipeline, "feature_extractor")
-            else None,
-            config=dict(pipeline.config),
+        pipeline = DiffusionPipeline.from_pretrained(unoptimized_dir)
+
+        target_models = {"safety_checker": None}
+        target_models["text_encoder"] = pipeline.text_encoder
+        if hasattr(pipeline, "text_encoder_2"):
+            target_models["text_encoder_2"] = pipeline.text_encoder_2
+        target_models["vae_decoder"] = pipeline.vae_decoder if hasattr(pipeline, "vae_decoder") else pipeline.vae
+        target_models["vae_encoder"] = pipeline.vae_encoder if hasattr(pipeline, "vae_encoder") else pipeline.vae
+
+        other_models = {}
+        other_models["tokenizer"] = pipeline.tokenizer
+        if hasattr(pipeline, "tokenizer_2"):
+            other_models["tokenizer_2"] = pipeline.tokenizer_2
+        other_models["scheduler"] = pipeline.scheduler
+        if hasattr(pipeline, "feature_extractor"):
+            other_models["feature_extractor"] = pipeline.feature_extractor
+        del pipeline
+
+        for submodel in submodels:
+            target_models[submodel] = OnnxRuntimeModel.from_pretrained(
+                model_info[submodel]["unoptimized"]["path"].parent
+            )
+
+        pipeline = (
+            ORTStableDiffusionXLPipeline(
+                text_encoder_session=target_models["text_encoder"],
+                text_encoder_2_session=target_models["text_encoder_2"],
+                unet_session=target_models["unet"],
+                vae_decoder_session=target_models["vae_decoder"],
+                vae_encoder_session=target_models["vae_encoder"],
+                **other_models,
+                config=dict(pipeline.config),
+            )
+            if is_sdxl
+            else OnnxStableDiffusionPipeline(
+                **target_models,
+                **other_models,
+                requires_safety_checker=False,
+            )
         )
-        if is_sdxl
-        else OnnxStableDiffusionPipeline(
-            **kwargs,
-            tokenizer=pipeline.tokenizer,
-            scheduler=pipeline.scheduler,
-            feature_extractor=pipeline.feature_extractor,
-            requires_safety_checker=False,
-        )
-    )
+        pipeline.to_json_file(optimized_dir / "model_index.json")
+        del pipeline, target_models, other_models
 
-    print("Saving unoptimized models...")
-    onnx_pipeline.save_pretrained(unoptimized_dir)
+        for submodel_name in submodels:
+            try:
+                src_path: Path = model_info[submodel_name]["optimized"]["path"]
+                dst_path: Path = optimized_dir / submodel_name / "model.onnx"
+                if not os.path.isdir(dst_path.parent):
+                    os.mkdir(dst_path.parent)
+                shutil.copyfile(src_path, dst_path)
 
-    print("Copying optimized models...")
-    shutil.copytree(
-        unoptimized_dir, optimized_dir, ignore=shutil.ignore_patterns("weights.pb")
-    )
-    for submodel_name in submodels:
-        try:
-            src_path: Path = model_info[submodel_name]["optimized"]["path"]
-            dst_path: Path = optimized_dir / submodel_name / "model.onnx"
-            shutil.copyfile(src_path, dst_path)
+                weights_src_path = src_path.parent / (src_path.name + ".data")
+                if weights_src_path.is_file():
+                    weights_dst_path = dst_path.parent / (dst_path.name + ".data")
+                    shutil.copyfile(weights_src_path, weights_dst_path)
+            except Exception:
+                print(f"Error: Something went wrong. Failed to copy the component '{submodel_name}' of the optimized model.")
 
-            weights_src_path = src_path.parent / (src_path.name + ".data")
-            if weights_src_path.is_file():
-                weights_dst_path = dst_path.parent / (dst_path.name + ".data")
-                shutil.copyfile(weights_src_path, weights_dst_path)
-        except Exception:
-            pass
+        with open(optimized_dir / "opt_config.json", "w") as opt_config:
+            json.dump(
+                {
+                    "sample_height_dim": sample_height_dim,
+                    "sample_width_dim": sample_width_dim,
+                    "sample_height": sample_height,
+                    "sample_width": sample_width,
+                },
+                opt_config,
+            )
 
-    with open(optimized_dir / "opt_config.json", "w") as opt_config:
-        json.dump(
-            {
-                "sample_height_dim": sample_height_dim,
-                "sample_width_dim": sample_width_dim,
-                "sample_height": sample_height,
-                "sample_width": sample_width,
-            },
-            opt_config,
-        )
-
-    shared.refresh_checkpoints()
+        shared.refresh_checkpoints()
     print("Optimization complete.")
+
+    return model_info

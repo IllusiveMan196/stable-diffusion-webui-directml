@@ -638,9 +638,6 @@ def prepare_environment():
                 f"Olive optimization requires DirectML as a backend, but you have: '{args.backend}'. Try again with '--backend directml'."
             )
             exit(0)
-        print(
-            "WARNING! Because Olive optimization does not support torch 2.0, some packages will be downgraded and it can occur version mismatches between packages. (Strongly recommend to create another virtual environment to run Olive)"
-        )
         if not is_installed("olive-ai"):
             run_pip("install olive-ai[directml]", "Olive")
 
