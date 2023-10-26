@@ -31,11 +31,11 @@ class ONNXStableDiffusionXLModel(
         self, sampler: SamplerData
     ) -> ORTStableDiffusionXLPipeline:
         return ORTStableDiffusionXLPipeline(
-            text_encoder_session=self.load_orm("text_encoder"),
-            text_encoder_2_session=self.load_orm("text_encoder_2"),
-            unet_session=self.load_orm("unet"),
-            vae_decoder_session=self.load_orm("vae_decoder"),
-            vae_encoder_session=self.load_orm("vae_encoder"),
+            text_encoder_session=self.load_inference_session("text_encoder"),
+            text_encoder_2_session=self.load_inference_session("text_encoder_2"),
+            unet_session=self.load_inference_session("unet"),
+            vae_decoder_session=self.load_inference_session("vae_decoder"),
+            vae_encoder_session=self.load_inference_session("vae_encoder"),
             tokenizer=self.load_tokenizer("tokenizer"),
             tokenizer_2=self.load_tokenizer("tokenizer_2"),
             scheduler=sampler.constructor.from_pretrained(
@@ -49,11 +49,11 @@ class ONNXStableDiffusionXLModel(
         self, sampler: SamplerData
     ) -> ORTStableDiffusionXLImg2ImgPipeline:
         return ORTStableDiffusionXLImg2ImgPipeline(
-            text_encoder_session=self.load_orm("text_encoder"),
-            text_encoder_2_session=self.load_orm("text_encoder_2"),
-            unet_session=self.load_orm("unet"),
-            vae_decoder_session=self.load_orm("vae_decoder"),
-            vae_encoder_session=self.load_orm("vae_encoder"),
+            text_encoder_session=self.load_inference_session("text_encoder"),
+            text_encoder_2_session=self.load_inference_session("text_encoder_2"),
+            unet_session=self.load_inference_session("unet"),
+            vae_decoder_session=self.load_inference_session("vae_decoder"),
+            vae_encoder_session=self.load_inference_session("vae_encoder"),
             tokenizer=self.load_tokenizer("tokenizer"),
             tokenizer_2=self.load_tokenizer("tokenizer_2"),
             scheduler=sampler.constructor.from_pretrained(
