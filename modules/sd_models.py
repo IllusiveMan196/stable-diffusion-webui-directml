@@ -76,7 +76,7 @@ class CheckpointInfo:
 
         if is_optimized:
             name += " [Optimized]"
-        elif shared.opts.use_just_in_time_optimization:
+        elif shared.opts.use_just_in_time_optimization and shared.cmd_opts.onnx:
             name += " [JIT]"
 
         def read_metadata():
