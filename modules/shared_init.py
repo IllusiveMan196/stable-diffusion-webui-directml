@@ -21,7 +21,7 @@ def initialize():
     if os.path.exists(shared.config_filename):
         shared.opts.load(shared.config_filename)
 
-    if cmd_opts.backend == "directml":
+    if cmd_opts.use_directml:
         dml.initialize()
         dml.do_hijack()
 

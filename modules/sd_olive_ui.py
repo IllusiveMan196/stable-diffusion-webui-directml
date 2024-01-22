@@ -1,6 +1,5 @@
 import os
 import json
-import torch
 import shutil
 from typing import Union, Optional, Tuple, List
 from pathlib import Path
@@ -32,7 +31,7 @@ available_sampling_methods = [
 
 
 def ready(unoptimized_dir: str, optimized_dir: str):
-    unload_model_weights()
+    unload_model_weights(shared.sd_model)
 
     unoptimized_dir = Path(models_path) / "OliveCache" / unoptimized_dir
     optimized_dir = Path(models_path) / "ONNX-Olive" / optimized_dir
@@ -69,7 +68,6 @@ def optimize_sd_from_ckpt(
 
     pipeline = StableDiffusionPipeline.from_single_file(
         os.path.join(models_path, "Stable-diffusion", checkpoint),
-        torch_dtype=torch.float32,
         requires_safety_checker=False,
         scheduler_type=scheduler_type,
     )
@@ -130,7 +128,6 @@ def optimize_sdxl_from_ckpt(
 
     pipeline = StableDiffusionXLPipeline.from_single_file(
         os.path.join(models_path, "Stable-diffusion", checkpoint),
-        torch_dtype=torch.float32,
         requires_safety_checker=False,
         scheduler_type=scheduler_type,
     )
@@ -191,13 +188,12 @@ def optimize_sd_from_onnx(
         pipeline = load_pipeline(
             unoptimized_dir,
             False,
-            torch_dtype=torch.float32,
             requires_safety_checker=False,
             local_files_only=True,
         )
     else:
         pipeline = StableDiffusionPipeline.from_pretrained(
-            model_id, torch_dtype=torch.float32, requires_safety_checker=False
+            model_id, requires_safety_checker=False,
         )
         pipeline.save_pretrained(unoptimized_dir)
     del pipeline
@@ -256,13 +252,12 @@ def optimize_sdxl_from_onnx(
         pipeline = load_pipeline(
             unoptimized_dir,
             True,
-            torch_dtype=torch.float32,
             requires_safety_checker=False,
             local_files_only=True,
         )
     else:
         pipeline = StableDiffusionXLPipeline.from_pretrained(
-            model_id, torch_dtype=torch.float32, requires_safety_checker=False
+            model_id, requires_safety_checker=False,
         )
         pipeline.save_pretrained(unoptimized_dir)
     del pipeline

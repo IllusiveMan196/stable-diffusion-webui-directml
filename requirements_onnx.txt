@@ -38,3 +38,5 @@ protobuf<4.0.0
 torch
 torchvision==0.14.1
 torch-directml
+
+httpx==0.24.1

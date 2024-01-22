@@ -3,7 +3,7 @@ from contextlib import closing
 import modules.scripts
 from modules import processing
 from modules.generation_parameters_copypaste import create_override_settings_dict
-from modules.shared import opts, cmd_opts
+from modules.shared import opts
 import modules.shared as shared
 from modules.ui import plaintext_to_html
 import gradio as gr
@@ -13,7 +13,7 @@ def txt2img(id_task: str, prompt: str, negative_prompt: str, prompt_styles, step
     override_settings = create_override_settings_dict(override_settings_texts)
 
     process = processing.StableDiffusionProcessingTxt2Img
-    if cmd_opts.onnx:
+    if shared.cmd_opts.onnx:
         from modules.sd_onnx import BaseONNXModel
         if isinstance(shared.sd_model, BaseONNXModel):
             from modules.sd_onnx import ONNXStableDiffusionProcessingTxt2Img
@@ -54,7 +54,7 @@ def txt2img(id_task: str, prompt: str, negative_prompt: str, prompt_styles, step
 
     p.user = request.username
 
-    if cmd_opts.enable_console_prompts:
+    if shared.opts.enable_console_prompts:
         print(f"\ntxt2img: {prompt}", file=shared.progress_print_out)
 
     with closing(p):

@@ -29,10 +29,8 @@ else:
     cmd_opts, _ = parser.parse_known_args()
 
 
-cmd_opts.disable_extension_access = (
-    any([cmd_opts.share, cmd_opts.listen, cmd_opts.ngrok, cmd_opts.server_name])
-    and not cmd_opts.enable_insecure_extension_access
-)
+cmd_opts.webui_is_non_local = any([cmd_opts.share, cmd_opts.listen, cmd_opts.ngrok, cmd_opts.server_name])
+cmd_opts.disable_extension_access = cmd_opts.webui_is_non_local and not cmd_opts.enable_insecure_extension_access
 if cmd_opts.olive:
     print("--olive was integrated into --onnx. Use --onnx instead.")
     cmd_opts.onnx = True

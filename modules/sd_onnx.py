@@ -42,6 +42,7 @@ class BaseONNXModel(Generic[T2I, I2I, INP], WebuiSdModel, metaclass=ABCMeta):
     is_sdxl: bool = False
     is_onnx: bool = True
     is_optimized: bool = False
+    lowvram = False
     path: Path
     sd_model_hash: None = None
     sd_checkpoint_info: CheckpointInfo

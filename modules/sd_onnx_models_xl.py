@@ -18,14 +18,14 @@ class ONNXStableDiffusionXLModel(
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._sess_options.add_free_dimension_override_by_name(
+        self.add_free_dimension_override_by_name(
             "unet_sample_channels", 4
         )
-        self._sess_options.add_free_dimension_override_by_name("unet_time_batch", 1)
-        self._sess_options.add_free_dimension_override_by_name(
+        self.add_free_dimension_override_by_name("unet_time_batch", 1)
+        self.add_free_dimension_override_by_name(
             "unet_hidden_sequence", 77
         )
-        self._sess_options.add_free_dimension_override_by_name("unet_time_ids_size", 6)
+        self.add_free_dimension_override_by_name("unet_time_ids_size", 6)
 
     def create_txt2img_pipeline(
         self, sampler: SamplerData

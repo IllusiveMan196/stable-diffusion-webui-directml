@@ -179,7 +179,7 @@ class KDiffusionSampler(sd_samplers_common.Sampler):
             extra_params_kwargs['solver_type'] = 'heun'
 
         self.model_wrap_cfg.init_latent = x
-        if shared.cmd_opts.backend == "directml":
+        if shared.cmd_opts.use_directml:
             self.model_wrap_cfg.init_latent = self.model_wrap_cfg.init_latent.float()
         self.last_latent = x
         self.sampler_extra_args = {
