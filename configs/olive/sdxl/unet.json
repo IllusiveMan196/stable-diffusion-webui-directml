@@ -2,15 +2,16 @@
   "input_model": {
     "type": "PyTorchModel",
     "config": {
-      "model_path": "runwayml/stable-diffusion-v1-5",
+      "model_path": "",
       "model_loader": "unet_load",
-      "model_script": "modules/sd_olive_scripts.py",
+      "model_script": "modules/olive_script.py",
       "io_config": {
         "input_names": [
           "sample",
           "timestep",
           "encoder_hidden_states",
-          "return_dict"
+          "text_embeds",
+          "time_ids"
         ],
         "output_names": ["out_sample"],
         "dynamic_axes": {
@@ -24,7 +25,12 @@
           "encoder_hidden_states": {
             "0": "unet_hidden_batch",
             "1": "unet_hidden_sequence"
-          }
+          },
+          "text_embeds": {
+            "0": "unet_text_embeds_batch",
+            "1": "unet_text_embeds_size"
+          },
+          "time_ids": { "0": "unet_time_ids_batch", "1": "unet_time_ids_size" }
         }
       },
       "dummy_inputs_func": "unet_conversion_inputs"
@@ -46,7 +52,7 @@
           "type": "latency",
           "sub_types": [{ "name": "avg" }],
           "user_config": {
-            "user_script": "modules/sd_olive_scripts.py",
+            "user_script": "modules/olive_script.py",
             "dataloader_func": "unet_data_loader",
             "batch_size": 2
           }
@@ -55,16 +61,7 @@
     }
   },
   "passes": {
-    "convert": {
-      "type": "OnnxConversion",
-      "config": {
-        "target_opset": 14,
-        "save_as_external_data": true,
-        "all_tensors_to_one_file": true,
-        "external_data_name": "weights.pb"
-      }
-    },
-    "optimize": {
+    "optimize_DmlExecutionProvider": {
       "type": "OrtTransformersOptimization",
       "disable_search": true,
       "config": {
@@ -72,7 +69,7 @@
         "opt_level": 0,
         "float16": true,
         "use_gpu": true,
-        "keep_io_types": false,
+        "keep_io_types": true,
         "optimization_options": {
           "enable_gelu": true,
           "enable_layer_norm": true,
@@ -99,8 +96,31 @@
           "GroupNorm": [0, 1, 2]
         }
       }
+    },
+    "optimize_CUDAExecutionProvider": {
+      "type": "OrtTransformersOptimization",
+      "disable_search": true,
+      "config": {
+        "model_type": "unet",
+        "opt_level": 0,
+        "float16": true,
+        "use_gpu": true,
+        "keep_io_types": true
+      }
+    },
+    "optimize_ROCMExecutionProvider": {
+      "type": "OrtTransformersOptimization",
+      "disable_search": true,
+      "config": {
+        "model_type": "unet",
+        "opt_level": 0,
+        "float16": true,
+        "use_gpu": true,
+        "keep_io_types": true
+      }
     }
   },
+  "pass_flows": [["optimize_AutoExecutionProvider"]],
   "engine": {
     "search_strategy": {
       "execution_order": "joint",

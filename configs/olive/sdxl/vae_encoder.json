@@ -2,9 +2,9 @@
   "input_model": {
     "type": "PyTorchModel",
     "config": {
-      "model_path": "stabilityai/stable-diffusion-xl-base-1.0",
+      "model_path": "",
       "model_loader": "vae_encoder_load",
-      "model_script": "modules/sd_olive_scripts.py",
+      "model_script": "modules/olive_script.py",
       "io_config": {
         "input_names": ["sample", "return_dict"],
         "output_names": ["latent_sample"],
@@ -42,7 +42,7 @@
           "type": "latency",
           "sub_types": [{ "name": "avg" }],
           "user_config": {
-            "user_script": "modules/sd_olive_scripts.py",
+            "user_script": "modules/olive_script.py",
             "dataloader_func": "vae_encoder_data_loader",
             "batch_size": 1
           }
@@ -51,13 +51,7 @@
     }
   },
   "passes": {
-    "convert": {
-      "type": "OnnxConversion",
-      "config": {
-        "target_opset": 14
-      }
-    },
-    "optimize": {
+    "optimize_DmlExecutionProvider": {
       "type": "OrtTransformersOptimization",
       "disable_search": true,
       "config": {
@@ -92,8 +86,31 @@
           "GroupNorm": [0, 1, 2]
         }
       }
+    },
+    "optimize_CUDAExecutionProvider": {
+      "type": "OrtTransformersOptimization",
+      "disable_search": true,
+      "config": {
+        "model_type": "vae",
+        "opt_level": 0,
+        "float16": true,
+        "use_gpu": true,
+        "keep_io_types": true
+      }
+    },
+    "optimize_ROCMExecutionProvider": {
+      "type": "OrtTransformersOptimization",
+      "disable_search": true,
+      "config": {
+        "model_type": "vae",
+        "opt_level": 0,
+        "float16": true,
+        "use_gpu": true,
+        "keep_io_types": true
+      }
     }
   },
+  "pass_flows": [["optimize_AutoExecutionProvider"]],
   "engine": {
     "search_strategy": {
       "execution_order": "joint",

@@ -1,7 +1,7 @@
 import platform
 import torch
-
 from modules.sd_hijack_utils import CondFunc
+
 
 memory_providers = ["None", "atiadlxx (AMD only)"]
 default_memory_provider = "None"
@@ -11,10 +11,9 @@ if platform.system() == "Windows":
 do_nothing = lambda: None # pylint: disable=unnecessary-lambda-assignment
 do_nothing_with_self = lambda self: None # pylint: disable=unnecessary-lambda-assignment
 
+
 def _set_memory_provider():
     from modules.shared import opts, cmd_opts
-    from modules.shared_state import log
-
     if opts.directml_memory_provider == "Performance Counter":
         from .backend import pdh_mem_get_info
         from .memory import MemoryProvider
@@ -25,7 +24,7 @@ def _set_memory_provider():
     elif opts.directml_memory_provider == "atiadlxx (AMD only)":
         device_name = torch.dml.get_device_name(cmd_opts.device_id)
         if "AMD" not in device_name and "Radeon" not in device_name:
-            log.warning(f"Memory stats provider is changed to None because the current device is not AMDGPU. Current Device: {device_name}")
+            print(f"Memory stats provider is changed to None because the current device is not AMDGPU. Current Device: {device_name}")
             opts.directml_memory_provider = "None"
             _set_memory_provider()
             return
@@ -36,7 +35,8 @@ def _set_memory_provider():
         torch.dml.mem_get_info = mem_get_info
     torch.cuda.mem_get_info = torch.dml.mem_get_info
 
-def initialize():
+
+def directml_init():
     try:
         from modules.dml.backend import DirectML # pylint: disable=ungrouped-imports
         # Alternative of torch.cuda for DirectML.
@@ -60,10 +60,12 @@ def initialize():
 
         torch.Tensor.directml = lambda self: self.to(torch.dml.current_device())
     except Exception as e:
+        print(f'DirectML initialization failed: {e}')
         return False, e
     return True, None
 
-def do_hijack():
+
+def directml_do_hijack():
     import modules.dml.hijack # pylint: disable=unused-import
     from modules.devices import device
 
@@ -79,5 +81,5 @@ def do_hijack():
 
     _set_memory_provider()
 
-def override_opts():
+def directml_override_opts():
     _set_memory_provider()

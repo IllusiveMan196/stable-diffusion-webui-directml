@@ -1,9 +1,5 @@
 import os
 import sys
-try:
-    import olive.workflows
-except Exception:
-    pass
 from modules.paths_internal import models_path, script_path, data_path, extensions_dir, extensions_builtin_dir, cwd  # noqa: F401
 
 import modules.safe  # noqa: F401

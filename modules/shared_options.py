@@ -1,3 +1,4 @@
+import os
 import gradio as gr
 
 from modules import localization, ui_components, shared_items, shared, interrogate, shared_gradio_themes
@@ -5,6 +6,7 @@ from modules.paths_internal import models_path, script_path, data_path, sd_confi
 from modules.shared_cmd_options import cmd_opts
 from modules.options import options_section, OptionInfo, OptionHTML, categories
 from modules.dml import memory_providers, default_memory_provider
+from modules.onnx_impl.execution_providers import get_default_execution_provider, available_execution_providers
 
 options_templates = {}
 hide_dirs = shared.hide_dirs
@@ -83,6 +85,8 @@ options_templates.update(options_section(('saving-paths', "Paths for saving", "s
     "outdir_img2img_grids": OptionInfo("outputs/img2img-grids", 'Output directory for img2img grids', component_args=hide_dirs),
     "outdir_save": OptionInfo("log/images", "Directory for saving images using the Save button", component_args=hide_dirs),
     "outdir_init_images": OptionInfo("outputs/init-images", "Directory for saving init images when using img2img", component_args=hide_dirs),
+    "onnx_cached_models_path": OptionInfo(os.path.join(models_path, 'ONNX', 'cache'), "Folder with ONNX cached models", component_args=hide_dirs),
+    "onnx_temp_dir": OptionInfo(os.path.join(models_path, 'ONNX', 'temp'), "Directory for ONNX conversion and Olive optimization process", component_args=hide_dirs),
 }))
 
 options_templates.update(options_section(('saving-to-dirs', "Saving to a directory", "saving"), {
@@ -199,14 +203,18 @@ options_templates.update(options_section(('img2img', "img2img", "sd"), {
 }))
 
 options_templates.update(options_section(('onnx', "ONNX Runtime", "sd"), {
-    "enable_mem_pattern": OptionInfo(True, "Enable the memory pattern optimization."),
-    "enable_mem_reuse": OptionInfo(True, "Enable the memory reuse optimization."),
-    "collect_garbage_for_each_generation": OptionInfo(False, "Collect garbage for each generation."),
-    "offload_state_dict": OptionInfo(False, "Offload state dict."),
+    "onnx_enable": OptionInfo(False, 'Use ONNX Runtime instead of PyTorch implementation'),
+    "diffusers_pipeline": OptionInfo('ONNX Stable Diffusion', 'Diffusers pipeline', gr.Dropdown, lambda: {"choices": list(shared_items.get_pipelines())}),
+    "onnx_execution_provider": OptionInfo(get_default_execution_provider().value, 'Execution Provider', gr.Dropdown, lambda: {"choices": available_execution_providers }),
+    "onnx_cache_converted": OptionInfo(True, 'ONNX cache converted models'),
 
-    "onnx_olive": OptionHTML("<h2>Olive</h2>"),
-    "use_just_in_time_optimization": OptionInfo(False, "Use Just-in-Time optimization. (experimental)"),
-    "cache_optimized_model": OptionInfo(False, "Cache optimized model. (unchecking this will remove existing cached models)"),
+    "olive_sep": OptionHTML("<h2>Olive</h2>"),
+    "olive_enable": OptionInfo(False, 'Enable Olive'),
+    "olive_submodels": OptionInfo([], 'Olive models to process', gr.CheckboxGroup, lambda: {"choices": ["Text Encoder", "Model", "VAE"]}),
+    "olive_float16": OptionInfo(True, 'Olive use FP16 on optimization'),
+    "olive_vae_encoder_float32": OptionInfo(False, 'Olive force FP32 for VAE Encoder'),
+    "olive_static_dims": OptionInfo(True, 'Olive use static dimensions'),
+    "olive_cache_optimized": OptionInfo(True, 'Olive cache optimized models'),
 }))
 
 options_templates.update(options_section(('optimizations', "Optimizations", "sd"), {

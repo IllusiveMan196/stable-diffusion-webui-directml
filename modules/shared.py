@@ -27,6 +27,7 @@ hypernetworks = {}
 loaded_hypernetworks = []
 
 state = None
+compiled_model_state = None
 
 prompt_styles = None
 
@@ -39,6 +40,7 @@ opts = None
 restricted_opts = None
 
 sd_model: sd_models_types.WebuiSdModel = None
+sd_refiner: sd_models_types.WebuiSdModel = None
 
 settings_components = None
 """assinged from ui.py, a mapping on setting names to gradio components repsponsible for those settings"""

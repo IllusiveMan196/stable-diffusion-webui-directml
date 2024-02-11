@@ -14,17 +14,13 @@ import ldm.modules.midas as midas
 
 from ldm.util import instantiate_from_config
 
-from modules import paths, shared, modelloader, devices, script_callbacks, sd_vae, sd_disable_initialization, errors, hashes, sd_models_config, sd_unet, sd_models_xl, cache, extra_networks, processing, lowvram, sd_hijack, patches
+from modules import paths, shared, shared_items, modelloader, devices, script_callbacks, sd_vae, sd_disable_initialization, errors, hashes, sd_models_config, sd_unet, sd_models_xl, cache, extra_networks, processing, lowvram, sd_hijack, patches
 from modules.timer import Timer
 import tomesd
 import numpy as np
 
 model_dir = "Stable-diffusion"
 model_path = os.path.abspath(os.path.join(paths.models_path, model_dir))
-olive_cache_dir = "OliveCache"
-olive_cache_path = os.path.abspath(os.path.join(paths.models_path, olive_cache_dir))
-onnx_optimized_model_dir = "ONNX-Olive"
-onnx_optimized_model_path = os.path.abspath(os.path.join(paths.models_path, onnx_optimized_model_dir))
 
 checkpoints_list = {}
 checkpoint_aliases = {}
@@ -51,19 +47,12 @@ def replace_key(d, key, new_key, value):
 
 
 class CheckpointInfo:
-    is_onnx: bool
-    is_optimized: bool
-
-    optimized_model_info: Union[dict, None] = None
-
-    def __init__(self, filename, is_onnx: bool = False, is_optimized: bool = False):
+    def __init__(self, filename):
         self.filename = filename
         abspath = os.path.abspath(filename)
         abs_ckpt_dir = os.path.abspath(shared.cmd_opts.ckpt_dir) if shared.cmd_opts.ckpt_dir is not None else None
 
         self.is_safetensors = os.path.splitext(filename)[1].lower() == ".safetensors"
-        self.is_onnx = is_onnx
-        self.is_optimized = is_optimized
 
         if abs_ckpt_dir and abspath.startswith(abs_ckpt_dir):
             name = abspath.replace(abs_ckpt_dir, '')
@@ -74,11 +63,6 @@ class CheckpointInfo:
 
         if name.startswith("\\") or name.startswith("/"):
             name = name[1:]
-
-        if is_optimized:
-            name += " [Optimized]"
-        elif shared.opts.use_just_in_time_optimization and shared.cmd_opts.onnx:
-            name += " [JIT]"
 
         def read_metadata():
             metadata = read_metadata_from_safetensors(filename)
@@ -96,9 +80,9 @@ class CheckpointInfo:
         self.name = name
         self.name_for_extra = os.path.splitext(os.path.basename(filename))[0]
         self.model_name = os.path.splitext(name.replace("/", "_").replace("\\", "_"))[0]
-        self.hash = model_hash(filename) if not shared.cmd_opts.onnx else None
+        self.hash = model_hash(filename) if os.path.isfile(filename) else None
 
-        self.sha256 = hashes.sha256_from_cache(self.filename, f"checkpoint/{name}") if not shared.cmd_opts.onnx else None
+        self.sha256 = hashes.sha256_from_cache(self.filename, f"checkpoint/{name}") if os.path.isfile(filename) else None
         self.shorthash = self.sha256[0:10] if self.sha256 else None
 
         self.title = name if self.shorthash is None else f'{name} [{self.shorthash}]'
@@ -114,9 +98,6 @@ class CheckpointInfo:
             checkpoint_aliases[id] = self
 
     def calculate_shorthash(self):
-        if self.is_onnx:
-            return
-
         self.sha256 = hashes.sha256(self.filename, f"checkpoint/{self.name}")
         if self.sha256 is None:
             return
@@ -162,10 +143,6 @@ def checkpoint_tiles(use_short=False):
     return [x.short_title if use_short else x.title for x in checkpoints_list.values()]
 
 
-def list_onnx_models(path: str):
-    return [os.path.join(path, f) for f in listdir(path) if os.path.isdir(os.path.join(path, f))]
-
-
 def list_sd_models(path: str):
     return [os.path.join(path, f) for f in listdir(path) if f.endswith(".ckpt") or f.endswith(".safetensors")]
 
@@ -181,15 +158,7 @@ def list_models():
         model_url = "https://huggingface.co/runwayml/stable-diffusion-v1-5/resolve/main/v1-5-pruned-emaonly.safetensors"
 
     model_list = []
-    optimized_model_list = []
-    jit_model_list = []
-    if shared.cmd_opts.onnx:
-        if shared.opts.use_just_in_time_optimization:
-            jit_model_list = list_sd_models(model_path)
-        model_list = list_onnx_models(olive_cache_path)
-        optimized_model_list = list_onnx_models(onnx_optimized_model_path)
-    else:
-        model_list = modelloader.load_models(model_path=model_path, model_url=model_url, command_path=shared.cmd_opts.ckpt_dir, ext_filter=[".ckpt", ".safetensors"], download_name="v1-5-pruned-emaonly.safetensors", ext_blacklist=[".vae.ckpt", ".vae.safetensors"])
+    model_list = modelloader.load_models(model_path=model_path, model_url=model_url, command_path=shared.cmd_opts.ckpt_dir, ext_filter=[".ckpt", ".safetensors"], download_name="v1-5-pruned-emaonly.safetensors", ext_blacklist=[".vae.ckpt", ".vae.safetensors"])
 
     if os.path.exists(cmd_ckpt):
         checkpoint_info = CheckpointInfo(cmd_ckpt)
@@ -200,15 +169,7 @@ def list_models():
         print(f"Checkpoint in --ckpt argument not found (Possible it was moved to {model_path}: {cmd_ckpt}", file=sys.stderr)
 
     for filename in model_list:
-        checkpoint_info = CheckpointInfo(filename, shared.cmd_opts.onnx, False)
-        checkpoint_info.register()
-
-    for filename in optimized_model_list:
-        checkpoint_info = CheckpointInfo(filename, True, True)
-        checkpoint_info.register()
-
-    for filename in jit_model_list:
-        checkpoint_info = CheckpointInfo(filename, False, False)
+        checkpoint_info = CheckpointInfo(filename)
         checkpoint_info.register()
 
 
@@ -602,20 +563,6 @@ class SdModelData:
 model_data = SdModelData()
 
 
-def load_onnx_model(checkpoint_info: CheckpointInfo, already_loaded_state_dict=None):
-    from modules.sd_onnx_models import ONNXStableDiffusionModel
-    from modules.sd_onnx_models_xl import ONNXStableDiffusionXLModel
-
-    path = os.path.join(olive_cache_path, checkpoint_info.filename)
-    constructor = ONNXStableDiffusionXLModel if os.path.isdir(path) and os.path.isdir(os.path.join(path, "text_encoder_2")) else ONNXStableDiffusionModel
-    sd_model = constructor(checkpoint_info)
-
-    model_data.set_sd_model(sd_model)
-    print(f"Model {checkpoint_info.title} loaded.")
-
-    return sd_model
-
-
 def get_empty_cond(sd_model):
 
     p = processing.StableDiffusionProcessingTxt2Img()
@@ -653,8 +600,6 @@ def send_model_to_device(m):
 
 def send_model_to_trash(m):
     m.to(device="meta")
-    if hasattr(m, "is_onnx") and m.is_onnx:
-        m.pipeline = None
     devices.torch_gc()
 
 
@@ -665,13 +610,20 @@ def load_model(checkpoint_info=None, already_loaded_state_dict=None):
     timer = Timer()
 
     if model_data.sd_model:
-        if not shared.cmd_opts.onnx:
+        if not shared.opts.onnx_enable:
             sd_hijack.model_hijack.undo_hijack(model_data.sd_model)
         send_model_to_trash(model_data.sd_model)
         model_data.sd_model = None
 
-    if shared.cmd_opts.onnx:
-        return load_onnx_model(checkpoint_info, already_loaded_state_dict=already_loaded_state_dict)
+    if shared.opts.onnx_enable:
+        pipeline = shared_items.get_pipelines().get(shared.opts.diffusers_pipeline, None)
+        if os.path.isdir(checkpoint_info.filename):
+            model_data.sd_model = pipeline.from_pretrained(checkpoint_info.filename)
+        else:
+            model_data.sd_model = pipeline.from_single_file(checkpoint_info.filename)
+        model_data.sd_model.sd_checkpoint_info = checkpoint_info
+        model_data.sd_model.sd_model_hash = checkpoint_info.hash
+        return model_data.sd_model
 
     timer.record("unload existing model")
 
@@ -819,7 +771,7 @@ def reload_model_weights(sd_model=None, info=None):
     if not sd_model:
         sd_model = model_data.sd_model
 
-    if shared.cmd_opts.onnx:
+    if shared.opts.onnx_enable:
         load_model(checkpoint_info)
         return model_data.sd_model
 

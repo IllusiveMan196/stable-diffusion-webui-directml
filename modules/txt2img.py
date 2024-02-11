@@ -12,16 +12,7 @@ import gradio as gr
 def txt2img(id_task: str, prompt: str, negative_prompt: str, prompt_styles, steps: int, sampler_name: str, n_iter: int, batch_size: int, cfg_scale: float, height: int, width: int, enable_hr: bool, denoising_strength: float, hr_scale: float, hr_upscaler: str, hr_second_pass_steps: int, hr_resize_x: int, hr_resize_y: int, hr_checkpoint_name: str, hr_sampler_name: str, hr_prompt: str, hr_negative_prompt, override_settings_texts, request: gr.Request, *args):
     override_settings = create_override_settings_dict(override_settings_texts)
 
-    process = processing.StableDiffusionProcessingTxt2Img
-    if shared.cmd_opts.onnx:
-        from modules.sd_onnx import BaseONNXModel
-        if isinstance(shared.sd_model, BaseONNXModel):
-            from modules.sd_onnx import ONNXStableDiffusionProcessingTxt2Img
-            process = ONNXStableDiffusionProcessingTxt2Img
-            if shared.sd_model.is_optimized:
-                from modules.sd_olive import OptimizedONNXStableDiffusionProcessingTxt2Img
-                process = OptimizedONNXStableDiffusionProcessingTxt2Img
-    p = process(
+    p = processing.StableDiffusionProcessingTxt2Img(
         sd_model=shared.sd_model,
         outpath_samples=opts.outdir_samples or opts.outdir_txt2img_samples,
         outpath_grids=opts.outdir_grids or opts.outdir_txt2img_grids,

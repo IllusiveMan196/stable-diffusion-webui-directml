@@ -436,7 +436,7 @@ def requirements_met(requirements_file):
 
 
 def prepare_environment():
-    torch_command = "pip install torch==2.0.1 torchvision==0.15.2 --extra-index-url https://download.pytorch.org/whl/cu118"
+    torch_command = "pip install torch==2.2.0 torchvision==0.17.0" if args.use_cpu_torch else "pip install torch==2.2.0 torchvision==0.17.0 --extra-index-url https://download.pytorch.org/whl/cu121"
 
     if not args.use_directml and not args.use_ipex:
         nvidia_driver_found = shutil.which("nvidia-smi") is not None
@@ -444,11 +444,11 @@ def prepare_environment():
         if nvidia_driver_found:
             print("NVIDIA driver was found.")
             torch_index_url = os.environ.get(
-                "TORCH_INDEX_URL", "https://download.pytorch.org/whl/cu118"
+                "TORCH_INDEX_URL", "https://download.pytorch.org/whl/cu121"
             )
             torch_command = os.environ.get(
                 "TORCH_COMMAND",
-                f"pip install torch==2.0.1 torchvision==0.15.2 --extra-index-url {torch_index_url}",
+                f"pip install torch==2.2.0 torchvision==0.17.0 --extra-index-url {torch_index_url}",
             )
         elif rocm_found:
             print("ROCm Toolkit was found.")
@@ -486,7 +486,7 @@ def prepare_environment():
             torch_command = os.environ.get('TORCH_COMMAND', f"pip install torch==2.0.0a0 intel-extension-for-pytorch==2.0.110+gitba7f6c1 --extra-index-url {torch_index_url}")
     requirements_file = os.environ.get(
         "REQS_FILE",
-        "requirements_onnx.txt" if args.onnx else "requirements_versions.txt",
+        "requirements_versions.txt",
     )
 
     xformers_package = os.environ.get("XFORMERS_PACKAGE", "xformers==0.0.20")
@@ -554,7 +554,7 @@ def prepare_environment():
         run(f'"{python}" -m {torch_command}', "Installing torch and torchvision", "Couldn't install torch", live=True)
         startup_timer.record("install torch")
 
-    if args.use_ipex or args.use_directml:
+    if args.use_ipex or args.use_directml or args.use_cpu_torch:
         args.skip_torch_cuda_test = True
     if not args.skip_torch_cuda_test and not check_run_python("import torch; assert torch.cuda.is_available()"):
         raise RuntimeError(
@@ -619,38 +619,27 @@ def prepare_environment():
         run_pip(f'install -r "{requirements_file}"', "requirements")
         startup_timer.record("install requirements")
 
-    if args.onnx:
-        try:
-            import onnxruntime
+    from modules import devices
+    if args.use_cpu_torch:
+        devices.backend = "cpu"
+    elif args.use_directml:
+        devices.backend = "directml"
+        if not is_installed("onnxruntime-directml") and platform.system() == "Windows":
+            run_pip("install onnxruntime-directml", "onnxruntime-directml")
+    elif args.use_ipex:
+        devices.backend = "ipex"
+    else:
+        devices.backend = "cuda"
+        if nvidia_driver_found:
+            if not is_installed("onnxruntime-gpu"):
+                run_pip("install onnxruntime-gpu", "onnxruntime-gpu")
+        elif rocm_found:
+            devices.backend = "rocm"
+            if not is_installed("onnxruntime-training"):
+                run_pip(f"install {get_onnxruntime_source_for_rocm()}", "onnxruntime-training")
 
-            attr_check = onnxruntime.SessionOptions  # noqa: F841
-        except AttributeError:
-            print(
-                "Failed to load SessionOptions. Reinstall onnxruntime & onnxruntime for GPU."
-            )
-            run_pip_uninstall("onnxruntime", "onnxruntime")
-            if args.use_directml:
-                run_pip_uninstall("onnxruntime-directml", "onnxruntime-directml")
-            else:
-                run_pip_uninstall("onnxruntime-gpu", "onnxruntime-gpu")
-        except ImportError:
-            pass
-        run_pip("install --no-deps onnxruntime", "onnxruntime")
-        if "onnx" not in args.use_cpu:
-            if args.use_directml:
-                run_pip(
-                    "install --no-deps onnxruntime-directml --upgrade",
-                    "onnxruntime-directml",
-                )
-            else:
-                run_pip(
-                    "install --no-deps onnxruntime-gpu --upgrade", "onnxruntime-gpu"
-                )
-
-        if not args.use_directml:
-            print("Olive optimization requires '--use-directml'.")
-        if not is_installed("olive-ai"):
-            run_pip("install olive-ai[directml]", "Olive")
+    from modules.onnx_impl import initialize_olive
+    initialize_olive()
 
     if not args.skip_install:
         run_extensions_installers(settings_file=args.ui_settings_file)
@@ -703,3 +692,21 @@ def dump_sysinfo():
         file.write(text)
 
     return filename
+
+
+def get_onnxruntime_source_for_rocm(rocm_ver):
+    ort_version = "1.16.3"
+
+    try:
+        import onnxruntime
+        ort_version = onnxruntime.__version__
+    except ImportError:
+        pass
+
+    cp_str = f"{sys.version_info.major}{sys.version_info.minor}"
+
+    if rocm_ver is None:
+        command = subprocess.run('hipconfig --version', shell=True, check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        rocm_ver = command.stdout.decode(encoding="utf8", errors="ignore").split('.')
+
+    return f"https://download.onnxruntime.ai/onnxruntime_training-{ort_version}%2Brocm{rocm_ver[0]}{rocm_ver[1]}-cp{cp_str}-cp{cp_str}-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"

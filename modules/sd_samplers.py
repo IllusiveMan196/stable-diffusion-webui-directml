@@ -3,7 +3,7 @@ from modules import sd_samplers_kdiffusion, sd_samplers_timesteps, sd_samplers_d
 # imports for functions that previously were here and are used by other modules
 from modules.sd_samplers_common import samples_to_image_grid, sample_to_image  # noqa: F401
 
-all_samplers = sd_samplers_diffusers.samplers if shared.cmd_opts.onnx else [
+all_samplers = sd_samplers_diffusers.samplers if shared.opts.onnx_enable else [
     *sd_samplers_kdiffusion.samplers_data_k_diffusion,
     *sd_samplers_timesteps.samplers_data_timesteps,
 ]

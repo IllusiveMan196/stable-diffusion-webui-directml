@@ -30,7 +30,11 @@ scikit-image>=0.19
 timm
 tomesd
 torch>=2.0.0
-torch-directml
 torchdiffeq
 torchsde
 transformers==4.30.2
+
+onnx
+onnxruntime
+optimum
+olive-ai

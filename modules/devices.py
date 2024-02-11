@@ -95,6 +95,7 @@ def enable_tf32():
 
 errors.run(enable_tf32, "Enabling TF32")
 
+backend = "cpu"
 cpu: torch.device = torch.device("cpu")
 device: torch.device = None
 device_interrogate: torch.device = None

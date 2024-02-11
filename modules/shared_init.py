@@ -2,8 +2,10 @@ import os
 
 import torch
 
-from modules import shared, dml
+from modules import shared
 from modules.shared import cmd_opts
+from modules.dml import directml_init, directml_do_hijack
+from modules.onnx_impl import initialize as initialize_onnx
 
 
 def initialize():
@@ -22,8 +24,8 @@ def initialize():
         shared.opts.load(shared.config_filename)
 
     if cmd_opts.use_directml:
-        dml.initialize()
-        dml.do_hijack()
+        directml_init()
+        directml_do_hijack()
 
     from modules import devices
     devices.device, devices.device_interrogate, devices.device_gfpgan, devices.device_esrgan, devices.device_codeformer = \
@@ -37,6 +39,7 @@ def initialize():
 
     from modules import shared_state
     shared.state = shared_state.State()
+    shared.compiled_model_state = shared_state.CompiledModelState()
 
     from modules import styles
     shared.prompt_styles = styles.StyleDatabase(shared.styles_filename)
@@ -50,4 +53,6 @@ def initialize():
     from modules import memmon, devices
     shared.mem_mon = memmon.MemUsageMonitor("MemMon", devices.device, shared.opts)
     shared.mem_mon.start()
+
+    initialize_onnx()
 
