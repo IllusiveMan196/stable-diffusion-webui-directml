@@ -619,27 +619,28 @@ def prepare_environment():
         run_pip(f'install -r "{requirements_file}"', "requirements")
         startup_timer.record("install requirements")
 
-    from modules import devices
-    if args.use_cpu_torch:
-        devices.backend = "cpu"
-    elif args.use_directml:
-        devices.backend = "directml"
-        if not is_installed("onnxruntime-directml") and platform.system() == "Windows":
-            run_pip("install onnxruntime-directml", "onnxruntime-directml")
-    elif args.use_ipex:
-        devices.backend = "ipex"
-    else:
-        devices.backend = "cuda"
-        if nvidia_driver_found:
-            if not is_installed("onnxruntime-gpu"):
-                run_pip("install onnxruntime-gpu", "onnxruntime-gpu")
-        elif rocm_found:
-            devices.backend = "rocm"
-            if not is_installed("onnxruntime-training"):
-                run_pip(f"install {get_onnxruntime_source_for_rocm()}", "onnxruntime-training")
+    if not args.skip_ort:
+        from modules import devices
+        if args.use_cpu_torch:
+            devices.backend = "cpu"
+        elif args.use_directml:
+            devices.backend = "directml"
+            if not is_installed("onnxruntime-directml") and platform.system() == "Windows":
+                run_pip("install onnxruntime-directml", "onnxruntime-directml")
+        elif args.use_ipex:
+            devices.backend = "ipex"
+        else:
+            devices.backend = "cuda"
+            if nvidia_driver_found:
+                if not is_installed("onnxruntime-gpu"):
+                    run_pip("install onnxruntime-gpu", "onnxruntime-gpu")
+            elif rocm_found:
+                devices.backend = "rocm"
+                if not is_installed("onnxruntime-training"):
+                    run_pip(f"install {get_onnxruntime_source_for_rocm()}", "onnxruntime-training")
 
-    from modules.onnx_impl import initialize_olive
-    initialize_olive()
+        from modules.onnx_impl import initialize_olive
+        initialize_olive()
 
     if not args.skip_install:
         run_extensions_installers(settings_file=args.ui_settings_file)
