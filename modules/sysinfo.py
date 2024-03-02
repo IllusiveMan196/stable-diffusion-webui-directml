@@ -10,7 +10,6 @@ import re
 
 import launch
 from modules import paths_internal, timer, shared, extensions, errors, devices
-from modules.dml.device_properties import DeviceProperties
 
 checksum_token = "DontStealMyGamePlz__WINNERS_DONT_USE_DRUGS__DONT_COPY_THAT_FLOPPY"
 environment_whitelist = {
@@ -25,13 +24,13 @@ environment_whitelist = {
     "XFORMERS_PACKAGE",
     "CLIP_PACKAGE",
     "OPENCLIP_PACKAGE",
+    "ASSETS_REPO",
     "STABLE_DIFFUSION_REPO",
     "K_DIFFUSION_REPO",
-    "CODEFORMER_REPO",
     "BLIP_REPO",
+    "ASSETS_COMMIT_HASH",
     "STABLE_DIFFUSION_COMMIT_HASH",
     "K_DIFFUSION_COMMIT_HASH",
-    "CODEFORMER_COMMIT_HASH",
     "BLIP_COMMIT_HASH",
     "COMMANDLINE_ARGS",
     "IGNORE_CMD_ARGS_ERRORS",
@@ -72,7 +71,12 @@ def check(x):
 
 def get_dict():
     ram = psutil.virtual_memory()
-    gpu = DeviceProperties(devices.device)
+    gpu = None
+    try:
+        from modules.dml.device_properties import DeviceProperties
+        gpu = DeviceProperties(devices.device)
+    except Exception:
+        pass
 
     res = {
         "Platform": platform.platform(),
@@ -94,7 +98,7 @@ def get_dict():
         "RAM": {
             x: pretty_bytes(getattr(ram, x, 0)) for x in ["total", "used", "free", "active", "inactive", "buffers", "cached", "shared"] if getattr(ram, x, 0) != 0
         },
-        "GPU": {
+        "GPU": "DirectML is not initialized" if gpu is None else {
             "model": gpu.name,
             "total_memory": gpu.total_memory,
         },

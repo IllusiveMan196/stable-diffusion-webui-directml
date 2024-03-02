@@ -1,6 +1,6 @@
-# Stable Diffusion web UI with DirectML
+# Stable Diffusion web UI with more backends
 
-A browser interface based on Gradio library for Stable Diffusion.
+A web interface for Stable Diffusion, implemented using Gradio library.
 
 ![](screenshot.png)
 
@@ -98,7 +98,10 @@ A browser interface based on Gradio library for Stable Diffusion.
 
 ## What's different from upstream repo?
 
-- Use [DirectML](https://github.com/microsoft/DirectML) when CUDA & ROCm Backend are unavailable.
+- `--use-directml`: Use [DirectML](https://github.com/microsoft/DirectML) as a torch backend.
+- `--use-zluda`: Use [ZLUDA](https://github.com/vosen/ZLUDA) as a torch backend.
+- Support ONNX Runtime.
+- Support Olive model optimization.
 
 ## Installation and Running
 
@@ -170,11 +173,12 @@ Licenses for borrowed code can be found in `Settings -> Licenses` screen, and al
 
 - Stable Diffusion - https://github.com/Stability-AI/stablediffusion, https://github.com/CompVis/taming-transformers
 - k-diffusion - https://github.com/crowsonkb/k-diffusion.git
-- GFPGAN - https://github.com/TencentARC/GFPGAN.git
-- CodeFormer - https://github.com/sczhou/CodeFormer
-- ESRGAN - https://github.com/xinntao/ESRGAN
-- SwinIR - https://github.com/JingyunLiang/SwinIR
-- Swin2SR - https://github.com/mv-lab/swin2sr
+- Spandrel - https://github.com/chaiNNer-org/spandrel implementing
+  - GFPGAN - https://github.com/TencentARC/GFPGAN.git
+  - CodeFormer - https://github.com/sczhou/CodeFormer
+  - ESRGAN - https://github.com/xinntao/ESRGAN
+  - SwinIR - https://github.com/JingyunLiang/SwinIR
+  - Swin2SR - https://github.com/mv-lab/swin2sr
 - LDSR - https://github.com/Hafiidz/latent-diffusion
 - MiDaS - https://github.com/isl-org/MiDaS
 - Ideas for optimizations - https://github.com/basujindal/stable-diffusion

@@ -333,6 +333,8 @@ class OnnxRawPipeline(PipelineBase):
             json.dump(model_index, file)
 
     def preprocess(self, p: StableDiffusionProcessing):
+        print('WARNING: ONNX implementation works best with SD.Next. Please consider migrating to SD.Next.')
+
         disable_classifier_free_guidance = p.cfg_scale < 0.01
 
         config.from_diffusers_cache = self.from_diffusers_cache

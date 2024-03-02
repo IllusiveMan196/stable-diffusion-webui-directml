@@ -6,6 +6,7 @@ from modules import shared
 from modules.shared import cmd_opts
 from modules.dml import directml_init, directml_do_hijack
 from modules.onnx_impl import initialize as initialize_onnx
+from modules.zluda import initialize_zluda
 
 
 def initialize():
@@ -20,8 +21,10 @@ def initialize():
     shared.options_templates = shared_options.options_templates
     shared.opts = options.Options(shared_options.options_templates, shared_options.restricted_opts)
     shared.restricted_opts = shared_options.restricted_opts
-    if os.path.exists(shared.config_filename):
+    try:
         shared.opts.load(shared.config_filename)
+    except FileNotFoundError:
+        pass
 
     if cmd_opts.use_directml:
         directml_init()
@@ -33,6 +36,7 @@ def initialize():
 
     devices.dtype = torch.float32 if cmd_opts.no_half else torch.float16
     devices.dtype_vae = torch.float32 if cmd_opts.no_half or cmd_opts.no_half_vae else torch.float16
+    devices.dtype_inference = torch.float32 if cmd_opts.precision == 'full' else devices.dtype
 
     shared.device = devices.device
     shared.weight_load_location = None if cmd_opts.lowram else "cpu"
@@ -54,5 +58,7 @@ def initialize():
     shared.mem_mon = memmon.MemUsageMonitor("MemMon", devices.device, shared.opts)
     shared.mem_mon.start()
 
-    initialize_onnx()
+    if not cmd_opts.skip_ort:
+        initialize_onnx()
+    initialize_zluda()
 

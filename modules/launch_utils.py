@@ -28,8 +28,7 @@ dir_repos = "repositories"
 # Whether to default to printing command output
 default_command_live = os.environ.get("WEBUI_LAUNCH_LIVE_OUTPUT") == "1"
 
-if "GRADIO_ANALYTICS_ENABLED" not in os.environ:
-    os.environ["GRADIO_ANALYTICS_ENABLED"] = "False"
+os.environ.setdefault('GRADIO_ANALYTICS_ENABLED', 'False')
 
 
 def check_python_version():
@@ -280,12 +279,7 @@ def git_clone(url, dir, name, commithash=None):
         return
 
     try:
-        run(
-            f'"{git}" clone "{url}" "{dir}"',
-            f"Cloning {name} into {dir}...",
-            f"Couldn't clone {name}",
-            live=True,
-        )
+        run(f'"{git}" clone --config core.filemode=false "{url}" "{dir}"', f"Cloning {name} into {dir}...", f"Couldn't clone {name}", live=True)
     except RuntimeError:
         shutil.rmtree(dir, ignore_errors=True)
         raise
@@ -360,11 +354,13 @@ def list_extensions(settings_file):
     settings = {}
 
     try:
-        if os.path.isfile(settings_file):
-            with open(settings_file, "r", encoding="utf8") as file:
-                settings = json.load(file)
+        with open(settings_file, "r", encoding="utf8") as file:
+            settings = json.load(file)
+    except FileNotFoundError:
+        pass
     except Exception:
-        errors.report("Could not load settings", exc_info=True)
+        errors.report(f'\nCould not load settings\nThe config file "{settings_file}" is likely corrupted\nIt has been moved to the "tmp/config.json"\nReverting config to default\n\n''', exc_info=True)
+        os.replace(settings_file, os.path.join(script_path, "tmp", "config.json"))
 
     disabled_extensions = set(settings.get("disabled_extensions", []))
     disable_all_extensions = settings.get("disable_all_extensions", "none")
@@ -436,36 +432,39 @@ def requirements_met(requirements_file):
 
 
 def prepare_environment():
+    system = platform.system()
+    nvidia_driver_found = False
+    rocm_found = False
+    hip_found = False
+    backend = "cuda"
     torch_command = "pip install torch==2.2.0 torchvision==0.17.0" if args.use_cpu_torch else "pip install torch==2.2.0 torchvision==0.17.0 --extra-index-url https://download.pytorch.org/whl/cu121"
 
-    if not args.use_directml and not args.use_ipex:
-        nvidia_driver_found = shutil.which("nvidia-smi") is not None
-        rocm_found = shutil.which("rocminfo") is not None
-        if nvidia_driver_found:
-            print("NVIDIA driver was found.")
-            torch_index_url = os.environ.get(
-                "TORCH_INDEX_URL", "https://download.pytorch.org/whl/cu121"
-            )
-            torch_command = os.environ.get(
-                "TORCH_COMMAND",
-                f"pip install torch==2.2.0 torchvision==0.17.0 --extra-index-url {torch_index_url}",
-            )
-        elif rocm_found:
-            print("ROCm Toolkit was found.")
-            torch_index_url = os.environ.get(
-                "TORCH_INDEX_URL", "https://download.pytorch.org/whl/rocm5.4.2"
-            )
-            torch_command = os.environ.get(
-                "TORCH_COMMAND",
-                f"pip install torch==2.0.1 torchvision==0.15.2 --index-url {torch_index_url}",
-            )
+    if args.use_cpu_torch:
+        backend = "cpu"
+        torch_command = os.environ.get(
+            "TORCH_COMMAND",
+            "pip install torch==2.2.0 torchvision==0.17.0",
+        )
     elif args.use_directml:
+        backend = "directml"
         torch_command = os.environ.get(
             "TORCH_COMMAND",
             "pip install torch==2.0.0 torchvision==0.15.1 torch-directml",
         )
+        args.skip_python_version_check = True
+    elif args.use_zluda:
+        print('WARNING: ZLUDA works best with SD.Next. Please consider migrating to SD.Next.')
+        backend = "cuda"
+        torch_index_url = os.environ.get(
+            "TORCH_INDEX_URL", "https://download.pytorch.org/whl/cu118"
+        )
+        torch_command = os.environ.get(
+            "TORCH_COMMAND",
+            f"pip install torch==2.2.0 torchvision==0.17.0 --index-url {torch_index_url}",
+        )
     elif args.use_ipex:
-        if platform.system() == "Windows":
+        backend = "ipex"
+        if system == "Windows":
             # The "Nuullll/intel-extension-for-pytorch" wheels were built from IPEX source for Intel Arc GPU: https://github.com/intel/intel-extension-for-pytorch/tree/xpu-main
             # This is NOT an Intel official release so please use it at your own risk!!
             # See https://github.com/Nuullll/intel-extension-for-pytorch/releases/tag/v2.0.110%2Bxpu-master%2Bdll-bundle for details.
@@ -484,51 +483,59 @@ def prepare_environment():
             # See https://intel.github.io/intel-extension-for-pytorch/index.html#installation for details.
             torch_index_url = os.environ.get('TORCH_INDEX_URL', "https://pytorch-extension.intel.com/release-whl/stable/xpu/us/")
             torch_command = os.environ.get('TORCH_COMMAND', f"pip install torch==2.0.0a0 intel-extension-for-pytorch==2.0.110+gitba7f6c1 --extra-index-url {torch_index_url}")
-    requirements_file = os.environ.get(
-        "REQS_FILE",
-        "requirements_versions.txt",
-    )
+    else:
+        nvidia_driver_found = shutil.which("nvidia-smi") is not None
+        rocm_found = shutil.which("rocminfo") is not None
+        hip_found = system == "Windows" and shutil.which("hipinfo") is not None
+        if nvidia_driver_found:
+            print("NVIDIA driver was found.")
+            backend = "cuda"
+            torch_index_url = os.environ.get(
+                "TORCH_INDEX_URL", "https://download.pytorch.org/whl/cu121"
+            )
+            torch_command = os.environ.get(
+                "TORCH_COMMAND",
+                f"pip install torch==2.2.0 torchvision==0.17.0 --extra-index-url {torch_index_url}",
+            )
+        elif hip_found: # ZLUDA
+            print("ROCm Toolkit was found.")
+            backend = "cuda"
+            torch_index_url = os.environ.get(
+                "TORCH_INDEX_URL", "https://download.pytorch.org/whl/cu118"
+            )
+            torch_command = os.environ.get(
+                "TORCH_COMMAND",
+                f"pip install torch==2.2.0 torchvision==0.17.0 --index-url {torch_index_url}",
+            )
+        elif rocm_found:
+            print("ROCm Toolkit was found.")
+            backend = "rocm"
+            torch_index_url = os.environ.get(
+                "TORCH_INDEX_URL", "https://download.pytorch.org/whl/rocm5.4.2"
+            )
+            torch_command = os.environ.get(
+                "TORCH_COMMAND",
+                f"pip install torch==2.0.1 torchvision==0.15.2 --index-url {torch_index_url}",
+            )
 
-    xformers_package = os.environ.get("XFORMERS_PACKAGE", "xformers==0.0.20")
-    clip_package = os.environ.get(
-        "CLIP_PACKAGE",
-        "https://github.com/openai/CLIP/archive/d50d76daa670286dd6cacf3bcd80b5e4823fc8e1.zip",
-    )
-    openclip_package = os.environ.get(
-        "OPENCLIP_PACKAGE",
-        "https://github.com/mlfoundations/open_clip/archive/bb6e834e9c70d9c27d0dc3ecedeebeaeb1ffad6b.zip",
-    )
+    requirements_file = os.environ.get('REQS_FILE', "requirements_versions.txt")
+    requirements_file_for_npu = os.environ.get('REQS_FILE_FOR_NPU', "requirements_npu.txt")
 
-    stable_diffusion_repo = os.environ.get(
-        "STABLE_DIFFUSION_REPO", "https://github.com/Stability-AI/stablediffusion.git"
-    )
-    stable_diffusion_xl_repo = os.environ.get(
-        "STABLE_DIFFUSION_XL_REPO",
-        "https://github.com/Stability-AI/generative-models.git",
-    )
-    k_diffusion_repo = os.environ.get(
-        "K_DIFFUSION_REPO", "https://github.com/crowsonkb/k-diffusion.git"
-    )
-    codeformer_repo = os.environ.get(
-        "CODEFORMER_REPO", "https://github.com/sczhou/CodeFormer.git"
-    )
-    blip_repo = os.environ.get("BLIP_REPO", "https://github.com/salesforce/BLIP.git")
+    xformers_package = os.environ.get('XFORMERS_PACKAGE', 'xformers==0.0.23.post1')
+    clip_package = os.environ.get('CLIP_PACKAGE', "https://github.com/openai/CLIP/archive/d50d76daa670286dd6cacf3bcd80b5e4823fc8e1.zip")
+    openclip_package = os.environ.get('OPENCLIP_PACKAGE', "https://github.com/mlfoundations/open_clip/archive/bb6e834e9c70d9c27d0dc3ecedeebeaeb1ffad6b.zip")
 
-    stable_diffusion_commit_hash = os.environ.get(
-        "STABLE_DIFFUSION_COMMIT_HASH", "cf1d67a6fd5ea1aa600c4df58e5b47da45f6bdbf"
-    )
-    stable_diffusion_xl_commit_hash = os.environ.get(
-        "STABLE_DIFFUSION_XL_COMMIT_HASH", "45c443b316737a4ab6e40413d7794a7f5657c19f"
-    )
-    k_diffusion_commit_hash = os.environ.get(
-        "K_DIFFUSION_COMMIT_HASH", "ab527a9a6d347f364e3d185ba6d714e22d80cb3c"
-    )
-    codeformer_commit_hash = os.environ.get(
-        "CODEFORMER_COMMIT_HASH", "c5b4593074ba6214284d6acd5f1719b6c5d739af"
-    )
-    blip_commit_hash = os.environ.get(
-        "BLIP_COMMIT_HASH", "48211a1594f1321b00f14c9f7a5b4813144b2fb9"
-    )
+    assets_repo = os.environ.get('ASSETS_REPO', "https://github.com/AUTOMATIC1111/stable-diffusion-webui-assets.git")
+    stable_diffusion_repo = os.environ.get('STABLE_DIFFUSION_REPO', "https://github.com/Stability-AI/stablediffusion.git")
+    stable_diffusion_xl_repo = os.environ.get('STABLE_DIFFUSION_XL_REPO', "https://github.com/Stability-AI/generative-models.git")
+    k_diffusion_repo = os.environ.get('K_DIFFUSION_REPO', 'https://github.com/crowsonkb/k-diffusion.git')
+    blip_repo = os.environ.get('BLIP_REPO', 'https://github.com/salesforce/BLIP.git')
+
+    assets_commit_hash = os.environ.get('ASSETS_COMMIT_HASH', "6f7db241d2f8ba7457bac5ca9753331f0c266917")
+    stable_diffusion_commit_hash = os.environ.get('STABLE_DIFFUSION_COMMIT_HASH', "cf1d67a6fd5ea1aa600c4df58e5b47da45f6bdbf")
+    stable_diffusion_xl_commit_hash = os.environ.get('STABLE_DIFFUSION_XL_COMMIT_HASH', "45c443b316737a4ab6e40413d7794a7f5657c19f")
+    k_diffusion_commit_hash = os.environ.get('K_DIFFUSION_COMMIT_HASH', "ab527a9a6d347f364e3d185ba6d714e22d80cb3c")
+    blip_commit_hash = os.environ.get('BLIP_COMMIT_HASH', "48211a1594f1321b00f14c9f7a5b4813144b2fb9")
 
     try:
         # the existence of this file is a signal to webui.sh/bat that webui needs to be restarted when it stops execution
@@ -553,6 +560,7 @@ def prepare_environment():
     if args.reinstall_torch or not is_installed("torch") or not is_installed("torchvision"):
         run(f'"{python}" -m {torch_command}', "Installing torch and torchvision", "Couldn't install torch", live=True)
         startup_timer.record("install torch")
+        patch_zluda()
 
     if args.use_ipex or args.use_directml or args.use_cpu_torch:
         args.skip_torch_cuda_test = True
@@ -580,37 +588,13 @@ def prepare_environment():
 
     os.makedirs(os.path.join(script_path, dir_repos), exist_ok=True)
 
-    git_clone(
-        stable_diffusion_repo,
-        repo_dir("stable-diffusion-stability-ai"),
-        "Stable Diffusion",
-        stable_diffusion_commit_hash,
-    )
-    git_clone(
-        stable_diffusion_xl_repo,
-        repo_dir("generative-models"),
-        "Stable Diffusion XL",
-        stable_diffusion_xl_commit_hash,
-    )
-    git_clone(
-        k_diffusion_repo,
-        repo_dir("k-diffusion"),
-        "K-diffusion",
-        k_diffusion_commit_hash,
-    )
-    git_clone(
-        codeformer_repo, repo_dir("CodeFormer"), "CodeFormer", codeformer_commit_hash
-    )
-    git_clone(blip_repo, repo_dir("BLIP"), "BLIP", blip_commit_hash)
+    git_clone(assets_repo, repo_dir('stable-diffusion-webui-assets'), "assets", assets_commit_hash)
+    git_clone(stable_diffusion_repo, repo_dir('stable-diffusion-stability-ai'), "Stable Diffusion", stable_diffusion_commit_hash)
+    git_clone(stable_diffusion_xl_repo, repo_dir('generative-models'), "Stable Diffusion XL", stable_diffusion_xl_commit_hash)
+    git_clone(k_diffusion_repo, repo_dir('k-diffusion'), "K-diffusion", k_diffusion_commit_hash)
+    git_clone(blip_repo, repo_dir('BLIP'), "BLIP", blip_commit_hash)
 
     startup_timer.record("clone repositores")
-
-    if not is_installed("lpips"):
-        run_pip(
-            f"install -r \"{os.path.join(repo_dir('CodeFormer'), 'requirements.txt')}\"",
-            "requirements for CodeFormer",
-        )
-        startup_timer.record("install CodeFormer requirements")
 
     if not os.path.isfile(requirements_file):
         requirements_file = os.path.join(script_path, requirements_file)
@@ -620,27 +604,29 @@ def prepare_environment():
         startup_timer.record("install requirements")
 
     if not args.skip_ort:
-        from modules import devices
-        if args.use_cpu_torch:
-            devices.backend = "cpu"
-        elif args.use_directml:
-            devices.backend = "directml"
+        if args.use_directml:
             if not is_installed("onnxruntime-directml") and platform.system() == "Windows":
                 run_pip("install onnxruntime-directml", "onnxruntime-directml")
-        elif args.use_ipex:
-            devices.backend = "ipex"
         else:
-            devices.backend = "cuda"
             if nvidia_driver_found:
                 if not is_installed("onnxruntime-gpu"):
                     run_pip("install onnxruntime-gpu", "onnxruntime-gpu")
             elif rocm_found:
-                devices.backend = "rocm"
                 if not is_installed("onnxruntime-training"):
                     run_pip(f"install {get_onnxruntime_source_for_rocm()}", "onnxruntime-training")
 
         from modules.onnx_impl import initialize_olive
         initialize_olive()
+
+    from modules import devices
+    devices.backend = backend
+
+    if not os.path.isfile(requirements_file_for_npu):
+        requirements_file_for_npu = os.path.join(script_path, requirements_file_for_npu)
+
+    if "torch_npu" in torch_command and not requirements_met(requirements_file_for_npu):
+        run_pip(f"install -r \"{requirements_file_for_npu}\"", "requirements_for_npu")
+        startup_timer.record("install requirements_for_npu")
 
     if not args.skip_install:
         run_extensions_installers(settings_file=args.ui_settings_file)
@@ -711,3 +697,28 @@ def get_onnxruntime_source_for_rocm(rocm_ver):
         rocm_ver = command.stdout.decode(encoding="utf8", errors="ignore").split('.')
 
     return f"https://download.onnxruntime.ai/onnxruntime_training-{ort_version}%2Brocm{rocm_ver[0]}{rocm_ver[1]}-cp{cp_str}-cp{cp_str}-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
+
+
+def patch_zluda():
+    zluda_path = os.environ.get('ZLUDA', None)
+    if zluda_path is None:
+        paths = os.environ.get('PATH', '').split(';')
+        for path in paths:
+            if os.path.exists(os.path.join(path, 'zluda_redirect.dll')):
+                zluda_path = path
+                break
+    if zluda_path is None:
+        print('Failed to automatically patch torch with ZLUDA. Could not find ZLUDA from PATH.')
+        return
+    venv_dir = os.environ.get('VENV_DIR', os.path.dirname(shutil.which('python')))
+    dlls_to_patch = {
+        'cublas.dll': 'cublas64_11.dll',
+        #'cudnn.dll': 'cudnn64_8.dll',
+        'cusparse.dll': 'cusparse64_11.dll',
+        'nvrtc.dll': 'nvrtc64_112_0.dll',
+    }
+    try:
+        for k, v in dlls_to_patch.items():
+            shutil.copyfile(os.path.join(zluda_path, k), os.path.join(venv_dir, 'Lib', 'site-packages', 'torch', 'lib', v))
+    except Exception as e:
+        print(f'ZLUDA: failed to automatically patch torch: {e}')
