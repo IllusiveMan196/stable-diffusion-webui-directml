@@ -5,7 +5,6 @@ import torch
 from modules import shared
 from modules.shared import cmd_opts
 from modules.dml import directml_init, directml_do_hijack
-from modules.onnx_impl import initialize as initialize_onnx
 from modules.zluda import initialize_zluda
 
 
@@ -29,6 +28,8 @@ def initialize():
     if cmd_opts.use_directml:
         directml_init()
         directml_do_hijack()
+    else:
+        torch.Tensor.__str__ = lambda self: None
 
     from modules import devices
     devices.device, devices.device_interrogate, devices.device_gfpgan, devices.device_esrgan, devices.device_codeformer = \
@@ -59,6 +60,7 @@ def initialize():
     shared.mem_mon.start()
 
     if not cmd_opts.skip_ort:
+        from modules.onnx_impl import initialize as initialize_onnx
         initialize_onnx()
-    initialize_zluda()
 
+    initialize_zluda()

@@ -9,7 +9,7 @@ import importlib.util
 import importlib.metadata
 import platform
 import json
-import shutil
+import glob
 from functools import lru_cache
 
 from modules import cmd_args, errors
@@ -57,7 +57,7 @@ and delete current Python and "venv" folder in WebUI's directory.
 
 You can download 3.10 Python from here: https://www.python.org/downloads/release/python-3106/
 
-{"Alternatively, use a binary release of WebUI: https://github.com/AUTOMATIC1111/stable-diffusion-webui/releases" if is_windows else ""}
+{"Alternatively, use a binary release of WebUI: https://github.com/AUTOMATIC1111/stable-diffusion-webui/releases/tag/v1.0.0-pre" if is_windows else ""}
 
 Use --skip-python-version-check to suppress this warning.
 """
@@ -437,13 +437,13 @@ def prepare_environment():
     rocm_found = False
     hip_found = False
     backend = "cuda"
-    torch_command = "pip install torch==2.2.0 torchvision==0.17.0" if args.use_cpu_torch else "pip install torch==2.2.0 torchvision==0.17.0 --extra-index-url https://download.pytorch.org/whl/cu121"
+    torch_command = "pip install torch==2.2.2 torchvision" if args.use_cpu_torch else "pip install torch==2.2.2 torchvision --extra-index-url https://download.pytorch.org/whl/cu121"
 
     if args.use_cpu_torch:
         backend = "cpu"
         torch_command = os.environ.get(
             "TORCH_COMMAND",
-            "pip install torch==2.2.0 torchvision==0.17.0",
+            "pip install torch==2.2.2 torchvision",
         )
     elif args.use_directml:
         backend = "directml"
@@ -460,8 +460,32 @@ def prepare_environment():
         )
         torch_command = os.environ.get(
             "TORCH_COMMAND",
-            f"pip install torch==2.2.0 torchvision==0.17.0 --index-url {torch_index_url}",
+            f"pip install torch==2.2.2 torchvision --index-url {torch_index_url}",
         )
+        zluda_path = find_zluda()
+        if zluda_path is None:
+            is_windows = system == "Windows"
+            import urllib.request
+            import zipfile
+            import tarfile
+            archive_type = zipfile.ZipFile if is_windows else tarfile.TarFile
+            try:
+                urllib.request.urlretrieve(f'https://github.com/lshqqytiger/ZLUDA/releases/download/rel.9e97c717c3fef536d3116f39a15d95626c1dfe39/ZLUDA-{platform.system().lower()}-amd64.{"zip" if is_windows else "tar.gz"}', '_zluda')
+                with archive_type('_zluda', 'r') as f:
+                    f.extractall('.zluda')
+                zluda_path = os.path.abspath('./.zluda')
+                os.remove('_zluda')
+            except Exception as e:
+                print(f'Failed to install ZLUDA: {e}')
+        if os.path.exists(os.path.join(zluda_path, 'nvcuda.dll')):
+            print(f'Using ZLUDA in {zluda_path}')
+            torch_command = os.environ.get(
+                'TORCH_COMMAND',
+                'pip install torch==2.2.2 torchvision --index-url https://download.pytorch.org/whl/cu118',
+            )
+            paths = os.environ.get('PATH', '.')
+            if zluda_path not in paths:
+                os.environ['PATH'] = paths + ';' + zluda_path
     elif args.use_ipex:
         backend = "ipex"
         if system == "Windows":
@@ -486,7 +510,7 @@ def prepare_environment():
     else:
         nvidia_driver_found = shutil.which("nvidia-smi") is not None
         rocm_found = shutil.which("rocminfo") is not None
-        hip_found = system == "Windows" and shutil.which("hipinfo") is not None
+        hip_found = shutil.which("hipinfo") is not None
         if nvidia_driver_found:
             print("NVIDIA driver was found.")
             backend = "cuda"
@@ -497,7 +521,7 @@ def prepare_environment():
                 "TORCH_COMMAND",
                 f"pip install torch==2.2.0 torchvision==0.17.0 --extra-index-url {torch_index_url}",
             )
-        elif hip_found: # ZLUDA
+        elif system == "Windows" and hip_found: # ZLUDA
             print("ROCm Toolkit was found.")
             backend = "cuda"
             torch_index_url = os.environ.get(
@@ -505,7 +529,7 @@ def prepare_environment():
             )
             torch_command = os.environ.get(
                 "TORCH_COMMAND",
-                f"pip install torch==2.2.0 torchvision==0.17.0 --index-url {torch_index_url}",
+                f"pip install torch==2.2.1 torchvision --index-url {torch_index_url}",
             )
         elif rocm_found:
             print("ROCm Toolkit was found.")
@@ -560,7 +584,8 @@ def prepare_environment():
     if args.reinstall_torch or not is_installed("torch") or not is_installed("torchvision"):
         run(f'"{python}" -m {torch_command}', "Installing torch and torchvision", "Couldn't install torch", live=True)
         startup_timer.record("install torch")
-        patch_zluda()
+        if args.use_zluda:
+            patch_zluda()
 
     if args.use_ipex or args.use_directml or args.use_cpu_torch:
         args.skip_torch_cuda_test = True
@@ -603,9 +628,18 @@ def prepare_environment():
         run_pip(f'install -r "{requirements_file}"', "requirements")
         startup_timer.record("install requirements")
 
-    if not args.skip_ort:
+    if not os.path.isfile(requirements_file_for_npu):
+        requirements_file_for_npu = os.path.join(script_path, requirements_file_for_npu)
+
+    if "torch_npu" in torch_command and not requirements_met(requirements_file_for_npu):
+        run_pip(f"install -r \"{requirements_file_for_npu}\"", "requirements_for_npu")
+        startup_timer.record("install requirements_for_npu")
+
+    if args.skip_ort:
+        print("Skipping onnxruntime installation.")
+    else:
         if args.use_directml:
-            if not is_installed("onnxruntime-directml") and platform.system() == "Windows":
+            if not is_installed("onnxruntime-directml"):
                 run_pip("install onnxruntime-directml", "onnxruntime-directml")
         else:
             if nvidia_driver_found:
@@ -613,20 +647,16 @@ def prepare_environment():
                     run_pip("install onnxruntime-gpu", "onnxruntime-gpu")
             elif rocm_found:
                 if not is_installed("onnxruntime-training"):
-                    run_pip(f"install {get_onnxruntime_source_for_rocm()}", "onnxruntime-training")
+                    command = subprocess.run(next(iter(glob.glob("/opt/rocm*/bin/hipconfig")), "hipconfig") + ' --version', shell=True, check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    rocm_ver = command.stdout.decode(encoding="utf8", errors="ignore").split('.')
+                    ort_version = os.environ.get('ONNXRUNTIME_VERSION', None)
+                    run_pip(f"install --pre onnxruntime-training{'' if ort_version is None else ('==' + ort_version)} --index-url https://pypi.lsh.sh/{rocm_ver[0]}{rocm_ver[1]} --extra-index-url https://pypi.org/simple", "onnxruntime-training")
+            else:
+                if not is_installed("onnxruntime"):
+                    run_pip("install onnxruntime", "onnxruntime")
 
         from modules.onnx_impl import initialize_olive
         initialize_olive()
-
-    from modules import devices
-    devices.backend = backend
-
-    if not os.path.isfile(requirements_file_for_npu):
-        requirements_file_for_npu = os.path.join(script_path, requirements_file_for_npu)
-
-    if "torch_npu" in torch_command and not requirements_met(requirements_file_for_npu):
-        run_pip(f"install -r \"{requirements_file_for_npu}\"", "requirements_for_npu")
-        startup_timer.record("install requirements_for_npu")
 
     if not args.skip_install:
         run_extensions_installers(settings_file=args.ui_settings_file)
@@ -642,6 +672,9 @@ def prepare_environment():
     if "--exit" in sys.argv:
         print("Exiting because of --exit argument")
         exit(0)
+
+    from modules import devices
+    devices.backend = backend
 
 
 def configure_for_tests():
@@ -681,25 +714,7 @@ def dump_sysinfo():
     return filename
 
 
-def get_onnxruntime_source_for_rocm(rocm_ver):
-    ort_version = "1.16.3"
-
-    try:
-        import onnxruntime
-        ort_version = onnxruntime.__version__
-    except ImportError:
-        pass
-
-    cp_str = f"{sys.version_info.major}{sys.version_info.minor}"
-
-    if rocm_ver is None:
-        command = subprocess.run('hipconfig --version', shell=True, check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        rocm_ver = command.stdout.decode(encoding="utf8", errors="ignore").split('.')
-
-    return f"https://download.onnxruntime.ai/onnxruntime_training-{ort_version}%2Brocm{rocm_ver[0]}{rocm_ver[1]}-cp{cp_str}-cp{cp_str}-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
-
-
-def patch_zluda():
+def find_zluda():
     zluda_path = os.environ.get('ZLUDA', None)
     if zluda_path is None:
         paths = os.environ.get('PATH', '').split(';')
@@ -707,6 +722,11 @@ def patch_zluda():
             if os.path.exists(os.path.join(path, 'zluda_redirect.dll')):
                 zluda_path = path
                 break
+    return zluda_path
+
+
+def patch_zluda():
+    zluda_path = find_zluda()
     if zluda_path is None:
         print('Failed to automatically patch torch with ZLUDA. Could not find ZLUDA from PATH.')
         return

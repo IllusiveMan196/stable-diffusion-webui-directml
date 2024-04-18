@@ -66,7 +66,7 @@ def directml_init():
 
 
 def directml_do_hijack():
-    import modules.dml.hijack # pylint: disable=unused-import
+    import modules.dml.hijack # noqa: F401
     from modules.devices import device
 
     CondFunc('torch.Generator',
