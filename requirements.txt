@@ -31,6 +31,7 @@ torch>=2.0.0
 torchdiffeq
 torchsde
 transformers==4.30.2
+pillow-avif-plugin==1.4.3
 
 onnx
 onnxruntime

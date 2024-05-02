@@ -52,7 +52,7 @@ torch.Tensor.pow_ = pow_
 
 
 _load = torch.load
-def load(f, map_location, *args, **kwargs):
+def load(f, map_location = "cpu", *args, **kwargs):
     if type(map_location) in (str, torch.device,):
         device = torch.device(map_location)
         if device.type == "privateuseone":
