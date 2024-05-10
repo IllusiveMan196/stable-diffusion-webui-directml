@@ -8,7 +8,7 @@ import gradio as gr
 
 from modules import images
 from modules.infotext_utils import create_override_settings_dict, parse_generation_parameters
-from modules.processing import Processed, process_images
+from modules.processing import Processed, StableDiffusionProcessingImg2Img, process_images
 from modules.shared import opts, state
 from modules.sd_models import get_closet_checkpoint_match
 import modules.shared as shared
@@ -186,7 +186,7 @@ def img2img(id_task: str, request: gr.Request, mode: int, prompt: str, negative_
 
     assert 0. <= denoising_strength <= 1., 'can only work with strength in [0.0, 1.0]'
 
-    p = processing.StableDiffusionProcessingImg2Img(
+    p = StableDiffusionProcessingImg2Img(
         sd_model=shared.sd_model,
         outpath_samples=opts.outdir_samples or opts.outdir_img2img_samples,
         outpath_grids=opts.outdir_grids or opts.outdir_img2img_grids,

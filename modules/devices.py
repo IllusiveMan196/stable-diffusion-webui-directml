@@ -225,6 +225,9 @@ def autocast(disable=False):
     if fp8 and dtype_inference == torch.float32:
         return manual_cast(dtype)
 
+    if device == cpu:
+        return contextlib.nullcontext()
+
     if dtype == torch.float32 or dtype_inference == torch.float32:
         return contextlib.nullcontext()
 

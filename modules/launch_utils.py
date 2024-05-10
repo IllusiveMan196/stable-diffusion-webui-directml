@@ -437,13 +437,13 @@ def prepare_environment():
     rocm_found = False
     hip_found = False
     backend = "cuda"
-    torch_command = "pip install torch==2.2.2 torchvision" if args.use_cpu_torch else "pip install torch==2.2.2 torchvision --extra-index-url https://download.pytorch.org/whl/cu121"
+    torch_command = "pip install torch==2.3.0 torchvision" if args.use_cpu_torch else "pip install torch==2.3.0 torchvision --extra-index-url https://download.pytorch.org/whl/cu121"
 
     if args.use_cpu_torch:
         backend = "cpu"
         torch_command = os.environ.get(
             "TORCH_COMMAND",
-            "pip install torch==2.2.2 torchvision",
+            "pip install torch==2.3.0 torchvision",
         )
     elif args.use_directml:
         backend = "directml"
@@ -460,32 +460,8 @@ def prepare_environment():
         )
         torch_command = os.environ.get(
             "TORCH_COMMAND",
-            f"pip install torch==2.2.2 torchvision --index-url {torch_index_url}",
+            f"pip install torch==2.3.0 torchvision --index-url {torch_index_url}",
         )
-        zluda_path = find_zluda()
-        if zluda_path is None:
-            is_windows = system == "Windows"
-            import urllib.request
-            import zipfile
-            import tarfile
-            archive_type = zipfile.ZipFile if is_windows else tarfile.TarFile
-            try:
-                urllib.request.urlretrieve(f'https://github.com/lshqqytiger/ZLUDA/releases/download/rel.9e97c717c3fef536d3116f39a15d95626c1dfe39/ZLUDA-{platform.system().lower()}-amd64.{"zip" if is_windows else "tar.gz"}', '_zluda')
-                with archive_type('_zluda', 'r') as f:
-                    f.extractall('.zluda')
-                zluda_path = os.path.abspath('./.zluda')
-                os.remove('_zluda')
-            except Exception as e:
-                print(f'Failed to install ZLUDA: {e}')
-        if os.path.exists(os.path.join(zluda_path, 'nvcuda.dll')):
-            print(f'Using ZLUDA in {zluda_path}')
-            torch_command = os.environ.get(
-                'TORCH_COMMAND',
-                'pip install torch==2.2.2 torchvision --index-url https://download.pytorch.org/whl/cu118',
-            )
-            paths = os.environ.get('PATH', '.')
-            if zluda_path not in paths:
-                os.environ['PATH'] = paths + ';' + zluda_path
     elif args.use_ipex:
         backend = "ipex"
         if system == "Windows":
@@ -519,9 +495,10 @@ def prepare_environment():
             )
             torch_command = os.environ.get(
                 "TORCH_COMMAND",
-                f"pip install torch==2.2.0 torchvision==0.17.0 --extra-index-url {torch_index_url}",
+                f"pip install torch==2.3.0 torchvision --extra-index-url {torch_index_url}",
             )
         elif system == "Windows" and hip_found: # ZLUDA
+            args.use_zluda = True
             print("ROCm Toolkit was found.")
             backend = "cuda"
             torch_index_url = os.environ.get(
@@ -529,17 +506,17 @@ def prepare_environment():
             )
             torch_command = os.environ.get(
                 "TORCH_COMMAND",
-                f"pip install torch==2.2.1 torchvision --index-url {torch_index_url}",
+                f"pip install torch==2.3.0 torchvision --index-url {torch_index_url}",
             )
         elif rocm_found:
             print("ROCm Toolkit was found.")
             backend = "rocm"
             torch_index_url = os.environ.get(
-                "TORCH_INDEX_URL", "https://download.pytorch.org/whl/rocm5.4.2"
+                "TORCH_INDEX_URL", "https://download.pytorch.org/whl/rocm6.0"
             )
             torch_command = os.environ.get(
                 "TORCH_COMMAND",
-                f"pip install torch==2.0.1 torchvision==0.15.2 --index-url {torch_index_url}",
+                f"pip install torch==2.3.0 torchvision --index-url {torch_index_url}",
             )
 
     requirements_file = os.environ.get('REQS_FILE', "requirements_versions.txt")
@@ -584,10 +561,35 @@ def prepare_environment():
     if args.reinstall_torch or not is_installed("torch") or not is_installed("torchvision"):
         run(f'"{python}" -m {torch_command}', "Installing torch and torchvision", "Couldn't install torch", live=True)
         startup_timer.record("install torch")
-        if args.use_zluda:
-            patch_zluda()
 
-    if args.use_ipex or args.use_directml or args.use_cpu_torch:
+    if args.use_zluda:
+        error = None
+        from modules import zluda_installer
+        try:
+            if args.use_zluda_dnn:
+                if zluda_installer.check_dnn_dependency():
+                    zluda_installer.enable_dnn()
+                else:
+                    print("Couldn't find the required dependency of ZLUDA DNN.")
+            zluda_installer.install()
+            zluda_path = zluda_installer.find()
+            zluda_installer.make_copy(zluda_path)
+        except Exception as e:
+            error = e
+            print(f'Failed to install ZLUDA: {e}')
+        if error is None:
+            try:
+                zluda_installer.load(zluda_path)
+                torch_command = os.environ.get('TORCH_COMMAND', 'pip install torch==2.3.0 torchvision --index-url https://download.pytorch.org/whl/cu118')
+                print(f'Using ZLUDA in {zluda_path}')
+            except Exception as e:
+                error = e
+                print(f'Failed to load ZLUDA: {e}')
+        if error is not None:
+            print('Using CPU-only torch')
+            torch_command = os.environ.get('TORCH_COMMAND', 'pip install torch torchvision')
+
+    if args.use_ipex or args.use_directml or args.use_zluda or args.use_cpu_torch:
         args.skip_torch_cuda_test = True
     if not args.skip_torch_cuda_test and not check_run_python("import torch; assert torch.cuda.is_available()"):
         raise RuntimeError(
@@ -654,9 +656,6 @@ def prepare_environment():
             else:
                 if not is_installed("onnxruntime"):
                     run_pip("install onnxruntime", "onnxruntime")
-
-        from modules.onnx_impl import initialize_olive
-        initialize_olive()
 
     if not args.skip_install:
         run_extensions_installers(settings_file=args.ui_settings_file)

@@ -18,7 +18,7 @@ class ENVStore:
     }
 
     def __getattr__(self, name: str):
-        value = os.environ.get(f"SDDML_OLIVE_{name}", None)
+        value = os.environ.get(f"SDAMDGPU_OLIVE_{name}", None)
         if value is None:
             return
         ty = self.__class__.__annotations__[name]
@@ -30,12 +30,12 @@ class ENVStore:
             return
         ty = self.__class__.__annotations__[name]
         serialize = self.__SERIALIZER[ty]
-        os.environ[f"SDDML_OLIVE_{name}"] = serialize(value)
+        os.environ[f"SDAMDGPU_OLIVE_{name}"] = serialize(value)
 
     def __delattr__(self, name: str) -> None:
         if name not in self.__class__.__annotations__:
             return
-        key = f"SDDML_OLIVE_{name}"
+        key = f"SDAMDGPU_OLIVE_{name}"
         if key not in os.environ:
             return
         os.environ.pop(key)
@@ -47,7 +47,7 @@ class OliveOptimizerConfig(ENVStore):
     is_sdxl: bool
 
     vae: str
-    vae_sdxl_fp16_fix: bool = False
+    vae_sdxl_fp16_fix: bool
 
     width: int
     height: int
