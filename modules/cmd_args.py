@@ -77,6 +77,7 @@ parser.add_argument("--use-directml", action="store_true", help="use DirectML de
 parser.add_argument("--use-zluda", action="store_true", help="use ZLUDA device as torch device")
 parser.add_argument("--use-zluda-dnn", action="store_true", help="enable ZLUDA DNN")
 parser.add_argument("--use-ipex", action="store_true", help="use Intel XPU as torch device")
+parser.add_argument("--override-torch", type=str, help="override torch version", default=None)
 parser.add_argument("--disable-model-loading-ram-optimization", action='store_true', help="disable an optimization that reduces RAM use when loading a model")
 parser.add_argument("--listen", action='store_true', help="launch gradio with 0.0.0.0 as server name, allowing to respond to network requests")
 parser.add_argument("--port", type=int, help="launch gradio with given server port, you need root/admin rights for ports < 1024, defaults to 7860 if available", default=None)

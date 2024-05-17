@@ -1,4 +1,4 @@
-# Stable Diffusion web UI with more backends
+# Stable Diffusion web UI for AMDGPUs
 
 A web interface for Stable Diffusion, implemented using Gradio library.
 
@@ -97,6 +97,8 @@ A web interface for Stable Diffusion, implemented using Gradio library.
 - [Segmind Stable Diffusion](https://huggingface.co/segmind/SSD-1B) support
 
 ## What's different from upstream repo?
+
+DirectML and ZLUDA support for AMDGPUs.
 
 - `--use-directml`: Use [DirectML](https://github.com/microsoft/DirectML) as a torch backend.
 - `--use-zluda`: Use [ZLUDA](https://github.com/vosen/ZLUDA) as a torch backend.

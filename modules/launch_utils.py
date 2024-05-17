@@ -437,13 +437,14 @@ def prepare_environment():
     rocm_found = False
     hip_found = False
     backend = "cuda"
-    torch_command = "pip install torch==2.3.0 torchvision" if args.use_cpu_torch else "pip install torch==2.3.0 torchvision --extra-index-url https://download.pytorch.org/whl/cu121"
+    torch_version = args.override_torch or '2.3.0'
+    torch_command = f"pip install torch=={torch_version} torchvision --extra-index-url https://download.pytorch.org/whl/cu121"
 
     if args.use_cpu_torch:
         backend = "cpu"
         torch_command = os.environ.get(
             "TORCH_COMMAND",
-            "pip install torch==2.3.0 torchvision",
+            f"pip install torch=={torch_version} torchvision",
         )
     elif args.use_directml:
         backend = "directml"
@@ -460,7 +461,7 @@ def prepare_environment():
         )
         torch_command = os.environ.get(
             "TORCH_COMMAND",
-            f"pip install torch==2.3.0 torchvision --index-url {torch_index_url}",
+            f"pip install torch=={torch_version} torchvision --index-url {torch_index_url}",
         )
     elif args.use_ipex:
         backend = "ipex"
@@ -495,7 +496,7 @@ def prepare_environment():
             )
             torch_command = os.environ.get(
                 "TORCH_COMMAND",
-                f"pip install torch==2.3.0 torchvision --extra-index-url {torch_index_url}",
+                f"pip install torch=={torch_version} torchvision --extra-index-url {torch_index_url}",
             )
         elif system == "Windows" and hip_found: # ZLUDA
             args.use_zluda = True
@@ -506,7 +507,7 @@ def prepare_environment():
             )
             torch_command = os.environ.get(
                 "TORCH_COMMAND",
-                f"pip install torch==2.3.0 torchvision --index-url {torch_index_url}",
+                f"pip install torch=={torch_version} torchvision --index-url {torch_index_url}",
             )
         elif rocm_found:
             print("ROCm Toolkit was found.")
@@ -516,7 +517,7 @@ def prepare_environment():
             )
             torch_command = os.environ.get(
                 "TORCH_COMMAND",
-                f"pip install torch==2.3.0 torchvision --index-url {torch_index_url}",
+                f"pip install torch=={torch_version} torchvision --index-url {torch_index_url}",
             )
 
     requirements_file = os.environ.get('REQS_FILE', "requirements_versions.txt")
@@ -580,14 +581,12 @@ def prepare_environment():
         if error is None:
             try:
                 zluda_installer.load(zluda_path)
-                torch_command = os.environ.get('TORCH_COMMAND', 'pip install torch==2.3.0 torchvision --index-url https://download.pytorch.org/whl/cu118')
                 print(f'Using ZLUDA in {zluda_path}')
             except Exception as e:
                 error = e
                 print(f'Failed to load ZLUDA: {e}')
         if error is not None:
             print('Using CPU-only torch')
-            torch_command = os.environ.get('TORCH_COMMAND', 'pip install torch torchvision')
 
     if args.use_ipex or args.use_directml or args.use_zluda or args.use_cpu_torch:
         args.skip_torch_cuda_test = True
