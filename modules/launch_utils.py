@@ -572,8 +572,8 @@ def prepare_environment():
                     zluda_installer.enable_dnn()
                 else:
                     print("Couldn't find the required dependency of ZLUDA DNN.")
-            zluda_installer.install()
-            zluda_path = zluda_installer.find()
+            zluda_path = zluda_installer.get_path()
+            zluda_installer.install(zluda_path)
             zluda_installer.make_copy(zluda_path)
         except Exception as e:
             error = e
