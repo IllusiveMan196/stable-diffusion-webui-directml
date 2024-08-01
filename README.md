@@ -98,12 +98,14 @@ A web interface for Stable Diffusion, implemented using Gradio library.
 
 ## What's different from upstream repo?
 
-DirectML and ZLUDA support for AMDGPUs.
+**[DirectML](https://github.com/microsoft/DirectML)** support for every GPUs that support DirectX 12 API.
 
-- `--use-directml`: Use [DirectML](https://github.com/microsoft/DirectML) as a torch backend.
-- `--use-zluda`: Use [ZLUDA](https://github.com/vosen/ZLUDA) as a torch backend.
-- Support ONNX Runtime.
-- Support Olive model optimization.
+**[ZLUDA](https://github.com/vosen/ZLUDA)** support for AMDGPUs.
+
+- `--use-directml`: Use DirectML as a torch backend.
+- `--use-zluda`: Use ZLUDA as a torch backend.
+- Support [ONNX Runtime](https://github.com/microsoft/onnxruntime).
+- Support [Olive](https://github.com/microsoft/Olive) model optimization.
 
 ## Installation and Running
 
@@ -129,7 +131,7 @@ Alternatively, use online services (like Google Colab):
 
 1. Install [Python 3.10.6](https://www.python.org/downloads/release/python-3106/) (Newer version of Python does not support torch), checking "Add Python to PATH".
 2. Install [git](https://git-scm.com/download/win).
-3. Download the stable-diffusion-webui-directml repository, for example by running `git clone https://github.com/lshqqytiger/stable-diffusion-webui-directml.git`.
+3. Download the stable-diffusion-webui-amdgpu repository, for example by running `git clone https://github.com/lshqqytiger/stable-diffusion-webui-amdgpu.git`.
 4. Run `webui-user.bat` from Windows Explorer as normal, non-administrator, user.
 
 ### Automatic Installation on Linux
@@ -147,10 +149,35 @@ sudo zypper install wget git python3 libtcmalloc4 libglvnd
 sudo pacman -S wget git python3
 ```
 
+If your system is very new, you need to install python3.11 or python3.10:
+
+```bash
+# Ubuntu 24.04
+sudo add-apt-repository ppa:deadsnakes/ppa
+sudo apt update
+sudo apt install python3.11
+
+# Manjaro/Arch
+sudo pacman -S yay
+yay -S python311 # do not confuse with python3.11 package
+
+# Only for 3.11
+# Then set up env variable in launch script
+export python_cmd="python3.11"
+# or in webui-user.sh
+python_cmd="python3.11"
+```
+
 2. Navigate to the directory you would like the webui to be installed and execute the following command:
 
 ```bash
-wget -q https://raw.githubusercontent.com/AUTOMATIC1111/stable-diffusion-webui/master/webui.sh
+wget -q https://raw.githubusercontent.com/lshqqytiger/stable-diffusion-webui-amdgpu/master/webui.sh
+```
+
+Or just clone the repo wherever you want:
+
+```bash
+git clone https://github.com/lshqqytiger/stable-diffusion-webui-amdgpu
 ```
 
 3. Run `webui.sh`.
@@ -174,7 +201,7 @@ For the purposes of getting Google and other search engines to crawl the wiki, h
 
 Licenses for borrowed code can be found in `Settings -> Licenses` screen, and also in `html/licenses.html` file.
 
-- Stable Diffusion - https://github.com/Stability-AI/stablediffusion, https://github.com/CompVis/taming-transformers
+- Stable Diffusion - https://github.com/Stability-AI/stablediffusion, https://github.com/CompVis/taming-transformers, https://github.com/mcmonkey4eva/sd3-ref
 - k-diffusion - https://github.com/crowsonkb/k-diffusion.git
 - Spandrel - https://github.com/chaiNNer-org/spandrel implementing
   - GFPGAN - https://github.com/TencentARC/GFPGAN.git

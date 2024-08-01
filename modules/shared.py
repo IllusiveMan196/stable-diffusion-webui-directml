@@ -49,7 +49,7 @@ sd_model: sd_models_types.WebuiSdModel = None
 sd_refiner: sd_models_types.WebuiSdModel = None
 
 settings_components: dict = None
-"""assigned from ui.py, a mapping on setting names to gradio components repsponsible for those settings"""
+"""assigned from ui.py, a mapping on setting names to gradio components responsible for those settings"""
 
 tab_names = []
 
