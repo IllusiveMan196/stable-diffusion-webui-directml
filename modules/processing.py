@@ -914,6 +914,7 @@ def process_images_inner(p: StableDiffusionProcessing) -> Processed:
         shared.sd_model = check_parameters_changed(p, False)
         if shared.sd_model.__class__.__name__ == "OnnxRawPipeline":
             shared.sd_model = preprocess_pipeline(p)
+        shared.sd_model.scheduler = sd_samplers.create_sampler(p.sampler_name, shared.sd_model)
 
         pipeline_type = shared.sd_model.__class__.__name__
         print(f'ONNX: processing={p.__class__.__name__}, pipeline={pipeline_type}')

@@ -38,8 +38,11 @@ def create_sampler(name, model):
     if model.is_sdxl and config.options.get("no_sdxl", False):
         raise Exception(f"Sampler {config.name} is not supported for SDXL")
 
-    sampler = config.constructor(model)
-    sampler.config = config
+    if shared.opts.onnx_enable:
+        sampler = config.constructor.from_config(model.scheduler.config)
+    else:
+        sampler = config.constructor(model)
+        sampler.config = config
 
     return sampler
 

@@ -432,14 +432,13 @@ def prepare_environment():
     system = platform.system()
     nvidia_driver_found = False
     backend = "cuda"
-    torch_version = args.override_torch or '2.3.0'
-    torch_command = f"pip install torch=={torch_version} torchvision --extra-index-url https://download.pytorch.org/whl/cu121"
+    torch_command = "pip install torch==2.3.1 torchvision --extra-index-url https://download.pytorch.org/whl/cu121"
 
     if args.use_cpu_torch:
         backend = "cpu"
         torch_command = os.environ.get(
             "TORCH_COMMAND",
-            f"pip install torch=={torch_version} torchvision",
+            "pip install torch==2.3.1 torchvision",
         )
     elif args.use_directml:
         backend = "directml"
@@ -451,13 +450,6 @@ def prepare_environment():
     elif args.use_zluda:
         print('WARNING: ZLUDA works best with SD.Next. Please consider migrating to SD.Next.')
         backend = "cuda"
-        torch_index_url = os.environ.get(
-            "TORCH_INDEX_URL", "https://download.pytorch.org/whl/cu118"
-        )
-        torch_command = os.environ.get(
-            "TORCH_COMMAND",
-            f"pip install torch=={torch_version} torchvision --index-url {torch_index_url}",
-        )
     elif args.use_ipex:
         backend = "ipex"
         if system == "Windows":
@@ -489,7 +481,7 @@ def prepare_environment():
             )
             torch_command = os.environ.get(
                 "TORCH_COMMAND",
-                f"pip install torch=={torch_version} torchvision --extra-index-url {torch_index_url}",
+                f"pip install torch==2.3.1 torchvision --extra-index-url {torch_index_url}",
             )
         else:
             from modules import rocm
@@ -498,13 +490,6 @@ def prepare_environment():
                     args.use_zluda = True
                     print(f"ROCm Toolkit {rocm.version} was found.")
                     backend = "cuda"
-                    torch_index_url = os.environ.get(
-                        "TORCH_INDEX_URL", "https://download.pytorch.org/whl/cu118"
-                    )
-                    torch_command = os.environ.get(
-                        "TORCH_COMMAND",
-                        f"pip install torch=={torch_version} torchvision --index-url {torch_index_url}",
-                    )
                 else:
                     print(f"ROCm Toolkit {rocm.version} was found.")
                     backend = "rocm"
@@ -513,7 +498,7 @@ def prepare_environment():
                     )
                     torch_command = os.environ.get(
                         "TORCH_COMMAND",
-                        f"pip install torch=={torch_version} torchvision --index-url {torch_index_url}",
+                        f"pip install torch==2.3.1 torchvision --index-url {torch_index_url}",
                     )
 
     requirements_file = os.environ.get('REQS_FILE', "requirements_versions.txt")
@@ -555,13 +540,9 @@ def prepare_environment():
     print(f"Version: {tag}")
     print(f"Commit hash: {commit}")
 
-    if args.reinstall_torch or not is_installed("torch") or not is_installed("torchvision"):
-        run(f'"{python}" -m {torch_command}', "Installing torch and torchvision", "Couldn't install torch", live=True)
-        startup_timer.record("install torch")
-
     if args.use_zluda:
         error = None
-        from modules import zluda_installer
+        from modules import zluda_installer, rocm
         try:
             zluda_path = zluda_installer.get_path()
             zluda_installer.install(zluda_path)
@@ -570,20 +551,41 @@ def prepare_environment():
             error = e
             print(f'Failed to install ZLUDA: {e}')
         if error is None:
+            if args.device_id is not None:
+                os.environ['HIP_VISIBLE_DEVICES'] = args.device_id
+                del args.device_id
             try:
                 zluda_installer.load(zluda_path)
                 print(f'Using ZLUDA in {zluda_path}')
+                agents = rocm.get_agents()
+                default_agent = None
+                if len(agents) == 0:
+                    print('WARNING: no ROCm agent was found!')
+                else:
+                    default_agent = agents[0]
+                    print(f'ROCm agents: {[agent.name for agent in agents]}, using {default_agent.name}')
+                torch_command = os.environ.get(
+                    "TORCH_COMMAND",
+                    f"pip install torch=={zluda_installer.get_default_torch_version(default_agent)} torchvision --index-url https://download.pytorch.org/whl/cu118",
+                )
             except Exception as e:
                 error = e
                 print(f'Failed to load ZLUDA: {e}')
         if error is not None:
             print('Using CPU-only torch')
 
+    if args.reinstall_torch or not is_installed("torch") or not is_installed("torchvision"):
+        run(f'"{python}" -m {torch_command}', "Installing torch and torchvision", "Couldn't install torch", live=True)
+        startup_timer.record("install torch")
+
     if backend == "rocm":
+        from modules import rocm
         if rocm.is_wsl:
             rocm.load_hsa_runtime()
         rocm.set_blaslt_enabled(False)
 
+    if args.skip_torch_cuda_test:
+        print("WARNING: you should not skip torch test unless you want CPU to work.")
     if args.use_ipex or args.use_directml or args.use_zluda or args.use_cpu_torch:
         args.skip_torch_cuda_test = True
     if not args.skip_torch_cuda_test and not check_run_python("import torch; assert torch.cuda.is_available()"):

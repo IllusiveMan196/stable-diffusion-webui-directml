@@ -1,6 +1,7 @@
 import diffusers
 from modules.sd_samplers_common import SamplerData
 
+
 samplers = [
     SamplerData("PNDM", diffusers.PNDMScheduler, [], None),
     SamplerData("LMS", diffusers.LMSDiscreteScheduler, [], None),

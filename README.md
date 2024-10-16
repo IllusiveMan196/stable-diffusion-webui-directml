@@ -109,16 +109,21 @@ A web interface for Stable Diffusion, implemented using Gradio library.
 
 ## Installation and Running
 
-Make sure the required [dependencies](https://github.com/AUTOMATIC1111/stable-diffusion-webui/wiki/Dependencies) are met and follow the instructions available for:
+### Using DirectML
 
-- [NVidia](https://github.com/AUTOMATIC1111/stable-diffusion-webui/wiki/Install-and-Run-on-NVidia-GPUs) (recommended)
-- [AMD](https://github.com/AUTOMATIC1111/stable-diffusion-webui/wiki/Install-and-Run-on-AMD-GPUs) GPUs.
-- [Intel CPUs, Intel GPUs (both integrated and discrete)](https://github.com/openvinotoolkit/stable-diffusion-webui/wiki/Installation-on-Intel-Silicon) (external wiki page)
-- [Ascend NPUs](https://github.com/wangshuai09/stable-diffusion-webui/wiki/Install-and-run-on-Ascend-NPUs) (external wiki page)
+DirectML is available for every gpu that supports DirectX 12.
 
-Alternatively, use online services (like Google Colab):
+If you are using one of recent AMDGPUs, ZLUDA is more recommended.
 
-- [List of Online Services](https://github.com/AUTOMATIC1111/stable-diffusion-webui/wiki/Online-Services)
+Start WebUI with `--use-directml`.
+
+### Using ZLUDA
+
+Most of AMDGPUs are compatible.
+
+Start WebUI with `--use-zluda`.
+
+Visit [detailed guide](https://github.com/vladmandic/automatic/wiki/ZLUDA) for details.
 
 ### Installation on Windows 10/11 with NVidia-GPUs using release package
 

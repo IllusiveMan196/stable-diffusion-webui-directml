@@ -26,6 +26,7 @@ SUBMODELS_LARGE = ("text_encoder_2", "unet",)
 
 
 class PipelineBase(TorchCompatibleModule, diffusers.DiffusionPipeline):
+    is_sdxl: bool = False
     model_type: str
     sd_model_hash: str
     sd_checkpoint_info: CheckpointInfo
@@ -105,7 +106,6 @@ class OnnxRawPipeline(PipelineBase):
     config = {}
     is_sd1 = False
     is_sd2 = False
-    _is_sdxl: bool
     is_refiner: bool
     from_diffusers_cache: bool
     original_filename: str
@@ -116,7 +116,7 @@ class OnnxRawPipeline(PipelineBase):
     scheduler: Any = None # for Img2Img
 
     def __init__(self, constructor: Type[PipelineBase], path: os.PathLike): # pylint: disable=super-init-not-called
-        self._is_sdxl = check_pipeline_sdxl(constructor)
+        self.is_sdxl = check_pipeline_sdxl(constructor)
         self.from_diffusers_cache = check_diffusers_cache(path)
         self.path = path
         self.original_filename = os.path.basename(os.path.dirname(os.path.dirname(path)) if self.from_diffusers_cache else path)
@@ -127,7 +127,7 @@ class OnnxRawPipeline(PipelineBase):
             self.init_dict = load_init_dict(constructor, path)
             self.scheduler = load_submodel(self.path, None, "scheduler", self.init_dict["scheduler"])
         else:
-            cls = diffusers.StableDiffusionXLPipeline if self._is_sdxl else diffusers.StableDiffusionPipeline
+            cls = diffusers.StableDiffusionXLPipeline if self.is_sdxl else diffusers.StableDiffusionPipeline
             try:
                 pipeline = cls.from_single_file(path)
                 self.scheduler = pipeline.scheduler
@@ -139,24 +139,21 @@ class OnnxRawPipeline(PipelineBase):
                 del pipeline
                 self.init_dict = load_init_dict(constructor, path)
             except Exception:
-                print(f'ONNX: Failed to load ONNX pipeline: is_sdxl={self._is_sdxl}')
+                print(f'ONNX: Failed to load ONNX pipeline: is_sdxl={self.is_sdxl}')
                 print('ONNX: You cannot load this model using the pipeline you selected. Please check Diffusers pipeline in ONNX Runtime Settings.')
                 return
         if "vae" in self.init_dict:
             del self.init_dict["vae"]
 
-        self.is_refiner = self._is_sdxl and "Img2Img" not in constructor.__name__ and "Img2Img" in diffusers.DiffusionPipeline.load_config(path)["_class_name"]
+        self.is_refiner = self.is_sdxl and "Img2Img" not in constructor.__name__ and "Img2Img" in diffusers.DiffusionPipeline.load_config(path)["_class_name"]
         self.constructor = constructor
         if self.is_refiner:
             from modules.onnx_impl.pipelines.onnx_stable_diffusion_xl_img2img_pipeline import OnnxStableDiffusionXLImg2ImgPipeline
             self.constructor = OnnxStableDiffusionXLImg2ImgPipeline
         self.model_type = self.constructor.__name__
 
-    @property
-    def is_sdxl(self):
-        return self._is_sdxl
-
     def derive_properties(self, pipeline: diffusers.DiffusionPipeline):
+        pipeline.is_sdxl = self.is_sdxl
         pipeline.sd_model_hash = self.sd_model_hash
         pipeline.sd_checkpoint_info = self.sd_checkpoint_info
         pipeline.scheduler = self.scheduler
@@ -189,7 +186,7 @@ class OnnxRawPipeline(PipelineBase):
                     sample,
                     temp_path,
                     opset_version=14,
-                    **get_io_config(submodel, self._is_sdxl),
+                    **get_io_config(submodel, self.is_sdxl),
                 )
                 model = onnx.load(temp_path)
             onnx.save_model(
@@ -208,13 +205,13 @@ class OnnxRawPipeline(PipelineBase):
             kwargs[submodel] = diffusers.OnnxRuntimeModel.load_model(
                 os.path.join(out_dir, submodel, "model.onnx"),
                 provider=get_provider(),
-            ) if self._is_sdxl else diffusers.OnnxRuntimeModel.from_pretrained(
+            ) if self.is_sdxl else diffusers.OnnxRuntimeModel.from_pretrained(
                 os.path.join(out_dir, submodel),
                 provider=get_provider(),
             )
             if submodel in init_dict:
                 del init_dict[submodel] # already loaded as OnnxRuntimeModel.
-        kwargs.update(load_submodels(in_dir, self._is_sdxl, init_dict)) # load others.
+        kwargs.update(load_submodels(in_dir, self.is_sdxl, init_dict)) # load others.
         constructor = get_base_constructor(self.constructor, self.is_refiner)
         kwargs = patch_kwargs(constructor, kwargs)
 
@@ -246,7 +243,7 @@ class OnnxRawPipeline(PipelineBase):
         for submodel in submodels:
             print(f"\nProcessing {submodel}")
 
-            with open(os.path.join(sd_configs_path, "olive", 'sdxl' if self._is_sdxl else 'sd', f"{submodel}.json"), "r", encoding="utf-8") as config_file:
+            with open(os.path.join(sd_configs_path, "olive", 'sdxl' if self.is_sdxl else 'sd', f"{submodel}.json"), "r", encoding="utf-8") as config_file:
                 olive_config: Dict[str, Dict[str, Dict]] = json.load(config_file)
 
             for flow in olive_config["pass_flows"]:
@@ -310,13 +307,13 @@ class OnnxRawPipeline(PipelineBase):
             kwargs[submodel] = diffusers.OnnxRuntimeModel.load_model(
                 os.path.join(out_dir, submodel, "model.onnx"),
                 provider=get_provider(),
-            ) if self._is_sdxl else diffusers.OnnxRuntimeModel.from_pretrained(
+            ) if self.is_sdxl else diffusers.OnnxRuntimeModel.from_pretrained(
                 os.path.join(out_dir, submodel),
                 provider=get_provider(),
             )
             if submodel in init_dict:
                 del init_dict[submodel] # already loaded as OnnxRuntimeModel.
-        kwargs.update(load_submodels(in_dir, self._is_sdxl, init_dict)) # load others.
+        kwargs.update(load_submodels(in_dir, self.is_sdxl, init_dict)) # load others.
         constructor = get_base_constructor(self.constructor, self.is_refiner)
         kwargs = patch_kwargs(constructor, kwargs)
 
@@ -337,18 +334,18 @@ class OnnxRawPipeline(PipelineBase):
         disable_classifier_free_guidance = p.cfg_scale < 0.01
 
         config.from_diffusers_cache = self.from_diffusers_cache
-        config.is_sdxl = self._is_sdxl
+        config.is_sdxl = self.is_sdxl
 
         config.vae = os.path.join(models_path, "VAE", shared.opts.sd_vae)
         if not os.path.isfile(config.vae):
             del config.vae
-        config.vae_sdxl_fp16_fix = self._is_sdxl and shared.opts.diffusers_vae_upcast == "false"
+        config.vae_sdxl_fp16_fix = self.is_sdxl and shared.opts.diffusers_vae_upcast == "false"
 
         config.width = p.width
         config.height = p.height
         config.batch_size = p.batch_size
 
-        if self._is_sdxl and not self.is_refiner:
+        if self.is_sdxl and not self.is_refiner:
             config.cross_attention_dim = 2048
             config.time_ids_size = 6
         else:
@@ -364,7 +361,7 @@ class OnnxRawPipeline(PipelineBase):
         elif not os.path.isdir(out_dir):
             try:
                 self.convert(
-                    (SUBMODELS_SDXL_REFINER if self.is_refiner else SUBMODELS_SDXL) if self._is_sdxl else SUBMODELS_SD,
+                    (SUBMODELS_SDXL_REFINER if self.is_refiner else SUBMODELS_SDXL) if self.is_sdxl else SUBMODELS_SD,
                     self.path if os.path.isdir(self.path) else shared.opts.onnx_temp_dir,
                     out_dir,
                 )
@@ -385,7 +382,7 @@ class OnnxRawPipeline(PipelineBase):
             if "Text Encoder" in shared.opts.olive_submodels:
                 if not self.is_refiner:
                     submodels_for_olive.append("text_encoder")
-                if self._is_sdxl:
+                if self.is_sdxl:
                     submodels_for_olive.append("text_encoder_2")
             if "Model" in shared.opts.olive_submodels:
                 submodels_for_olive.append("unet")
@@ -409,7 +406,7 @@ class OnnxRawPipeline(PipelineBase):
                     if shared.opts.olive_static_dims:
                         sess_options = DynamicSessionOptions()
                         sess_options.enable_static_dims({
-                            "is_sdxl": self._is_sdxl,
+                            "is_sdxl": self.is_sdxl,
                             "is_refiner": self.is_refiner,
 
                             "hidden_batch_size": p.batch_size if disable_classifier_free_guidance else p.batch_size * 2,
