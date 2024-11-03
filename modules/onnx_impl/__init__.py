@@ -190,7 +190,7 @@ def preprocess_pipeline(p):
 
 
 def ORTDiffusionModelPart_to(self, *args, **kwargs):
-    self.parent_model = self.parent_model.to(*args, **kwargs)
+    self.parent_pipeline = self.parent_pipeline.to(*args, **kwargs)
     return self
 
 
@@ -241,7 +241,7 @@ def initialize_onnx():
         diffusers.ORTStableDiffusionXLPipeline = diffusers.OnnxStableDiffusionXLPipeline # Huggingface model compatibility
         diffusers.ORTStableDiffusionXLImg2ImgPipeline = diffusers.OnnxStableDiffusionXLImg2ImgPipeline
 
-        optimum.onnxruntime.modeling_diffusion._ORTDiffusionModelPart.to = ORTDiffusionModelPart_to # pylint: disable=protected-access
+        optimum.onnxruntime.modeling_diffusion.ORTPipelinePart.to = ORTDiffusionModelPart_to # pylint: disable=protected-access
 
         fastapi_encoders.jsonable_encoder = jsonable_encoder
 

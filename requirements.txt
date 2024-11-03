@@ -36,5 +36,5 @@ pillow-avif-plugin==1.4.3
 
 onnx==1.16.2
 onnxruntime
-optimum
+optimum>=1.23
 olive-ai

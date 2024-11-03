@@ -23,6 +23,16 @@ def has_mps() -> bool:
         return mac_specific.has_mps
 
 
+def has_zluda() -> bool:
+    if not torch.cuda.is_available():
+        return False
+    try:
+        device = torch.device("cuda")
+        return torch.cuda.get_device_name(device).endswith("[ZLUDA]")
+    except Exception:
+        return False
+
+
 def cuda_no_autocast(device_id=None) -> bool:
     if device_id is None:
         device_id = get_cuda_device_id()
