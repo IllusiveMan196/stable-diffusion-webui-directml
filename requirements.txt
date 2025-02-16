@@ -4,7 +4,7 @@ accelerate
 
 blendmodes
 clean-fid
-diffusers==0.30.2
+diffusers
 diskcache
 einops
 facexlib
@@ -31,10 +31,10 @@ tomesd
 torch>=2.0.0
 torchdiffeq
 torchsde
-transformers
+transformers==4.30.2
 pillow-avif-plugin==1.4.3
 
 onnx==1.16.2
 onnxruntime
-optimum>=1.23
+optimum
 olive-ai

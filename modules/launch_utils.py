@@ -616,6 +616,10 @@ def prepare_environment():
         print("WARNING: you should not skip torch test unless you want CPU to work.")
     if args.use_ipex or args.use_directml or args.use_zluda or args.use_cpu_torch:
         args.skip_torch_cuda_test = True
+
+    if rocm.is_installed:
+        rocm.conceal()
+
     if not args.skip_torch_cuda_test and not check_run_python("import torch; assert torch.cuda.is_available()"):
         raise RuntimeError(
             'Torch is not able to use GPU; '
