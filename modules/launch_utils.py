@@ -451,7 +451,7 @@ def prepare_environment():
         args.skip_python_version_check = True
     elif args.use_zluda:
         print('WARNING: ZLUDA works best with SD.Next. Please consider migrating to SD.Next.')
-        backend = "cuda"
+        backend = "zluda"
     elif args.use_ipex:
         backend = "ipex"
         if system == "Windows":
@@ -489,7 +489,7 @@ def prepare_environment():
             if rocm.is_installed:
                 if system == "Windows": # ZLUDA
                     args.use_zluda = True
-                    backend = "cuda"
+                    backend = "zluda"
                 else:
                     backend = "rocm"
                     torch_index_url = os.environ.get(
@@ -539,7 +539,7 @@ def prepare_environment():
     print(f"Version: {tag}")
     print(f"Commit hash: {commit}")
 
-    if args.use_zluda or backend == "rocm":
+    if backend in ("rocm", "zluda",):
         device = None
         try:
             amd_gpus = rocm.get_agents()
@@ -575,6 +575,7 @@ def prepare_environment():
                     print('Setting HIP_VISIBLE_DEVICES and --device-id at the same time may be mistake.')
                 os.environ['HIP_VISIBLE_DEVICES'] = args.device_id
                 del args.device_id
+            args.skip_torch_cuda_test = True
 
             print("ZLUDA support: experimental")
             error = None
@@ -612,7 +613,7 @@ def prepare_environment():
 
     if args.skip_torch_cuda_test:
         print("WARNING: you should not skip torch test unless you want CPU to work.")
-    if args.use_ipex or args.use_directml or args.use_zluda or args.use_cpu_torch:
+    if args.use_ipex or args.use_directml or args.use_cpu_torch:
         args.skip_torch_cuda_test = True
 
     if rocm.is_installed:

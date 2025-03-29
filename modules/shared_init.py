@@ -4,8 +4,6 @@ import torch
 
 from modules import shared
 from modules.shared import cmd_opts
-from modules.dml import directml_init, directml_do_hijack
-from modules.zluda import initialize_zluda
 
 
 def initialize():
@@ -26,6 +24,7 @@ def initialize():
         pass
 
     if cmd_opts.use_directml:
+        from modules.dml import directml_init, directml_do_hijack
         directml_init()
         directml_do_hijack()
     else:
@@ -71,4 +70,6 @@ def initialize():
         from modules.onnx_impl import initialize_onnx
         initialize_onnx()
 
-    initialize_zluda()
+    if devices.backend == "zluda":
+        from modules.zluda import initialize_zluda
+        initialize_zluda()
