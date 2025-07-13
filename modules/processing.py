@@ -260,7 +260,7 @@ class StableDiffusionProcessing:
         self.s_noise = self.s_noise if self.s_noise is not None else opts.s_noise
 
     @property
-    def sd_model(self):
+    def sd_model(self): # noqa: F811
         return shared.sd_model
 
     @sd_model.setter
@@ -1683,7 +1683,7 @@ class StableDiffusionProcessingImg2Img(StableDiffusionProcessing):
         self.initial_noise_multiplier = opts.initial_noise_multiplier if self.initial_noise_multiplier is None else self.initial_noise_multiplier
 
     @property
-    def mask_blur(self):
+    def mask_blur(self): # noqa: F811
         if self.mask_blur_x == self.mask_blur_y:
             return self.mask_blur_x
         return None
