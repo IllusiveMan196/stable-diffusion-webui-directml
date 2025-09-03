@@ -10,7 +10,7 @@ from torch import einsum
 from ldm.util import default
 from einops import rearrange
 
-from modules import shared, errors, devices, sub_quadratic_attention, rocm_triton_windows
+from modules import shared, errors, devices, sub_quadratic_attention
 from modules.hypernetworks import hypernetwork
 
 import ldm.modules.attention
@@ -154,7 +154,11 @@ class SdOptimizationTritonFlashAttention(SdOptimization):
         self.sdpa_pre_flash_atten = None
 
     def is_available(self):
-        return hasattr(torch.nn.functional, "scaled_dot_product_attention") and callable(torch.nn.functional.scaled_dot_product_attention) and devices.has_zluda() and rocm_triton_windows.is_available
+        try:
+            from modules import rocm_triton_windows
+            return hasattr(torch.nn.functional, "scaled_dot_product_attention") and callable(torch.nn.functional.scaled_dot_product_attention) and devices.has_zluda() and rocm_triton_windows.is_available
+        except Exception:
+            return False
 
     def apply(self):
         if self.sdpa_pre_flash_atten is None:
