@@ -579,7 +579,7 @@ def prepare_environment():
                 else:
                     torch_command = os.environ.get('TORCH_COMMAND', 'pip install --no-cache-dir https://repo.radeon.com/rocm/windows/rocm-rel-6.4.4/torch-2.8.0a0%2Bgitfc14c65-cp312-cp312-win_amd64.whl https://repo.radeon.com/rocm/windows/rocm-rel-6.4.4/torchvision-0.24.0a0%2Bc85f008-cp312-cp312-win_amd64.whl')
             else:
-                raise NotImplementedError("TODO")
+                torch_command = os.environ.get('TORCH_COMMAND', f'pip install torch torchvision --index-url https://download.pytorch.org/whl/rocm{rocm.version}')
         else:
             if args.device_id is not None:
                 if os.environ.get('HIP_VISIBLE_DEVICES', None) is not None:
