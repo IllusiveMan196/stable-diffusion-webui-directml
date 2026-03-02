@@ -636,10 +636,10 @@ def prepare_environment():
         try:
             setuptools_version = run(f'"{python}" -c "import setuptools; print(setuptools.__version__)"', None, None).strip()
             if setuptools_version >= "70":
-                run_pip("install 'setuptools<70'", "setuptools")
+                run_pip("install setuptools==69.5.1", "setuptools")
         except Exception:
             # If setuptools check fails, install compatible version
-            run_pip("install 'setuptools<70'", "setuptools")
+            run_pip("install setuptools==69.5.1", "setuptools")
     # Install build dependencies early
     ensure_build_dependencies()
 
