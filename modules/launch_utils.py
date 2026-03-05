@@ -38,9 +38,9 @@ def check_python_version():
     micro = sys.version_info.micro
 
     if is_windows:
-        supported_minors = [10, 11]
+        supported_minors = [11, 12]
     else:
-        supported_minors = [7, 8, 9, 10, 11]
+        supported_minors = [10, 11, 12]
 
     if not (major == 3 and minor in supported_minors):
         import modules.errors
@@ -564,7 +564,7 @@ def prepare_environment():
             if device.therock is None:
                 backend = "zluda"
             else:
-                run_pip(f"install rocm rocm-sdk-core --index-url https://rocm.nightlies.amd.com/v2-staging/{device.therock}", "rocm")
+                run_pip(f"install rocm rocm-sdk-core --index-url https://rocm.nightlies.amd.com/{device.therock}", "rocm")
                 rocm.refresh()
 
         msg = f'ROCm: version={rocm.version}'
@@ -575,7 +575,7 @@ def prepare_environment():
         if backend == "rocm":
             if sys.platform == "win32":
                 if isinstance(rocm.environment, rocm.PythonPackageEnvironment):
-                    torch_command = os.environ.get('TORCH_COMMAND', f'pip install torch torchvision --index-url https://rocm.nightlies.amd.com/v2-staging/{device.therock}')
+                    torch_command = os.environ.get('TORCH_COMMAND', f'pip install torch torchvision --index-url https://rocm.nightlies.amd.com/{device.therock}')
                 else:
                     torch_command = os.environ.get('TORCH_COMMAND', 'pip install --no-cache-dir https://repo.radeon.com/rocm/windows/rocm-rel-6.4.4/torch-2.8.0a0%2Bgitfc14c65-cp312-cp312-win_amd64.whl https://repo.radeon.com/rocm/windows/rocm-rel-6.4.4/torchvision-0.24.0a0%2Bc85f008-cp312-cp312-win_amd64.whl')
             else:

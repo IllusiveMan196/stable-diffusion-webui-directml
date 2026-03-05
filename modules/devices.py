@@ -3,7 +3,7 @@ import contextlib
 from functools import lru_cache
 
 import torch
-from modules import errors, shared, npu_specific
+from modules import errors, shared, npu_specific, rocm
 
 if sys.platform == "darwin":
     from modules import mac_specific
@@ -32,6 +32,10 @@ def has_zluda() -> bool:
         return cc == (8, 8)
     except Exception:
         return False
+
+
+def get_hip_agent() -> rocm.Agent:
+    return rocm.Agent(device)
 
 
 def cuda_no_autocast(device_id=None) -> bool:
